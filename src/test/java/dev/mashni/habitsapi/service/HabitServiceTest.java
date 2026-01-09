@@ -15,6 +15,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -55,19 +58,19 @@ class HabitServiceTest {
     @DisplayName("Case 1: Habit with no logs should have streak 0")
     void testCalculateStreak_NoLogs_ReturnsZero() {
         // Arrange
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(new ArrayList<>());
+        testHabit.setLogs(new ArrayList<>());
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(0);
-        assertThat(habits.get(0).bestStreak()).isEqualTo(0);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(0);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(0);
+        assertThat(habitsPage.getContent().get(0).bestStreak()).isEqualTo(0);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(0);
     }
 
     @Test
@@ -81,20 +84,20 @@ class HabitServiceTest {
             createLog(testHabit, today),
             createLog(testHabit, yesterday)
         );
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(2);
-        assertThat(habits.get(0).bestStreak()).isEqualTo(2);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(2);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(2);
+        assertThat(habitsPage.getContent().get(0).bestStreak()).isEqualTo(2);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(2);
     }
 
     @Test
@@ -110,20 +113,20 @@ class HabitServiceTest {
             createLog(testHabit, yesterday),
             createLog(testHabit, dayBeforeYesterday)
         );
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(3);
-        assertThat(habits.get(0).bestStreak()).isEqualTo(3);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(3);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(3);
+        assertThat(habitsPage.getContent().get(0).bestStreak()).isEqualTo(3);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(3);
     }
 
     @Test
@@ -137,19 +140,19 @@ class HabitServiceTest {
             createLog(testHabit, today),
             createLog(testHabit, dayBeforeYesterday)
         );
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(1);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(2);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(1);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(2);
     }
 
     @Test
@@ -165,19 +168,19 @@ class HabitServiceTest {
             createLog(testHabit, today),
             createLog(testHabit, yesterday)
         );
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(2);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(3);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(2);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(3);
     }
 
     @Test
@@ -197,20 +200,20 @@ class HabitServiceTest {
             createLog(testHabit, today.minusDays(13)),
             createLog(testHabit, today.minusDays(14))
         );
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(2);
-        assertThat(habits.get(0).bestStreak()).isEqualTo(5);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(7);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(2);
+        assertThat(habitsPage.getContent().get(0).bestStreak()).isEqualTo(5);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(7);
     }
 
     @Test
@@ -224,20 +227,20 @@ class HabitServiceTest {
             createLog(testHabit, threeDaysAgo),
             createLog(testHabit, fourDaysAgo)
         );
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(0);
-        assertThat(habits.get(0).bestStreak()).isEqualTo(2);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(2);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(0);
+        assertThat(habitsPage.getContent().get(0).bestStreak()).isEqualTo(2);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(2);
     }
 
     @Test
@@ -247,19 +250,19 @@ class HabitServiceTest {
         var yesterday = LocalDate.now().minusDays(1);
 
         var logs = List.of(createLog(testHabit, yesterday));
+        testHabit.setLogs(logs);
 
-        when(habitRepository.findByUserAndStatus(testUser, HabitStatus.ACTIVE))
-            .thenReturn(List.of(testHabit));
-        when(habitLogRepository.findByHabitIdOrderByCompletedDateDesc(testHabit.getId()))
-            .thenReturn(logs);
+        Page<Habit> habitPage = new PageImpl<>(List.of(testHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
 
         // Act
-        var habits = habitService.getAllActiveHabits(testUser);
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
 
         // Assert
-        assertThat(habits).hasSize(1);
-        assertThat(habits.get(0).currentStreak()).isEqualTo(1);
-        assertThat(habits.get(0).daysCompleted()).isEqualTo(1);
+        assertThat(habitsPage.getContent()).hasSize(1);
+        assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(1);
+        assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(1);
     }
 
     private HabitLog createLog(Habit habit, LocalDate date) {

@@ -18,6 +18,7 @@ public class User {
     private UUID id;
 
     @NotBlank
+    @Email(message = "Email must be valid")
     @Column(nullable = false, unique = true)
     private String email;
 

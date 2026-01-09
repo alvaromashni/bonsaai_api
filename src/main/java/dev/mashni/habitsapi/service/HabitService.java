@@ -7,12 +7,13 @@ import dev.mashni.habitsapi.model.HabitStatus;
 import dev.mashni.habitsapi.model.User;
 import dev.mashni.habitsapi.repository.HabitLogRepository;
 import dev.mashni.habitsapi.repository.HabitRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -29,6 +30,12 @@ public class HabitService {
 
     @Transactional
     public Habit createHabit(CreateHabitRequest request, User user) {
+        // Validate user has not reached habit limit
+        long habitCount = habitRepository.countByUser(user);
+        if (habitCount >= 100) {
+            throw new IllegalArgumentException("User has reached the maximum limit of 100 habits");
+        }
+
         var habit = new Habit(request.name(), request.description(), request.startDate(), user);
         return habitRepository.save(habit);
     }
@@ -39,6 +46,17 @@ public class HabitService {
             .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
 
         var date = request.date() != null ? request.date() : LocalDate.now();
+
+        // Validate date is not before habit start date
+        if (date.isBefore(habit.getStartDate())) {
+            throw new IllegalArgumentException("Cannot check habit before its start date");
+        }
+
+        // Validate date is not in the future
+        if (date.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("Cannot check habit for future dates");
+        }
+
         var existingLog = habitLogRepository.findByHabitIdAndCompletedDate(habitId, date);
 
         if (existingLog.isPresent()) {
@@ -53,11 +71,9 @@ public class HabitService {
     }
 
     @Transactional(readOnly = true)
-    public List<HabitSummaryResponse> getAllActiveHabits(User user) {
-        var habits = habitRepository.findByUserAndStatus(user, HabitStatus.ACTIVE);
-        return habits.stream()
-            .map(this::mapToSummaryResponse)
-            .collect(Collectors.toList());
+    public Page<HabitSummaryResponse> getAllActiveHabits(User user, Pageable pageable) {
+        var habits = habitRepository.findByUserAndStatusWithLogs(user, HabitStatus.ACTIVE, pageable);
+        return habits.map(this::mapToSummaryResponse);
     }
 
     @Transactional(readOnly = true)
@@ -75,8 +91,8 @@ public class HabitService {
             .sorted()
             .collect(Collectors.toList());
 
-        var currentStreak = calculateCurrentStreak(logs);
-        var bestStreak = calculateBestStreak(logs);
+        var currentStreak = calculateCurrentStreak(logs, habit.getStartDate());
+        var bestStreak = calculateBestStreak(logs, habit.getStartDate());
 
         return new HabitDetailResponse(
             habit.getId(),
@@ -92,9 +108,10 @@ public class HabitService {
     }
 
     private HabitSummaryResponse mapToSummaryResponse(Habit habit) {
-        var logs = habitLogRepository.findByHabitIdOrderByCompletedDateDesc(habit.getId());
-        var currentStreak = calculateCurrentStreak(logs);
-        var bestStreak = calculateBestStreak(logs);
+        // Use logs already fetched with JOIN FETCH to avoid N+1 queries
+        var logs = habit.getLogs();
+        var currentStreak = calculateCurrentStreak(logs, habit.getStartDate());
+        var bestStreak = calculateBestStreak(logs, habit.getStartDate());
 
         return new HabitSummaryResponse(
             habit.getId(),
@@ -107,15 +124,41 @@ public class HabitService {
     }
 
     @Transactional
-    public void deleteHabit(UUID habitId){
-        habitRepository.deleteById(habitId);
+    public Habit updateHabit(UUID habitId, UpdateHabitRequest request, User user) {
+        var habit = habitRepository.findByIdAndUser(habitId, user)
+            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+
+        habit.setName(request.name());
+        habit.setDescription(request.description());
+
+        if (request.status() != null) {
+            habit.setStatus(request.status());
+        }
+
+        return habitRepository.save(habit);
+    }
+
+    @Transactional
+    public void deleteHabit(UUID habitId, User user) {
+        var habit = habitRepository.findByIdAndUser(habitId, user)
+            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+        habitRepository.delete(habit);
+    }
+
+    @Transactional
+    public Habit archiveHabit(UUID habitId, User user) {
+        var habit = habitRepository.findByIdAndUser(habitId, user)
+            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+        habit.setStatus(HabitStatus.ARCHIVED);
+        return habitRepository.save(habit);
     }
 
     /**
      * Calculate the current streak by counting consecutive days backward from today or yesterday.
      * If today is completed, count from today. Otherwise, count from yesterday.
+     * Days before the habit's start date are not counted.
      */
-    private int calculateCurrentStreak(List<HabitLog> logs) {
+    private int calculateCurrentStreak(List<HabitLog> logs, LocalDate habitStartDate) {
         if (logs.isEmpty()) {
             return 0;
         }
@@ -124,7 +167,7 @@ public class HabitService {
         var sortedDates = logs.stream()
             .map(HabitLog::getCompletedDate)
             .sorted((d1, d2) -> d2.compareTo(d1)) // Sort descending (most recent first)
-            .collect(Collectors.toList());
+            .toList();
 
         // Start counting from today or yesterday
         var startDate = sortedDates.contains(today) ? today : today.minusDays(1);
@@ -137,8 +180,8 @@ public class HabitService {
         int streak = 0;
         var currentDate = startDate;
 
-        // Count backwards while dates are consecutive
-        while (sortedDates.contains(currentDate)) {
+        // Count backwards while dates are consecutive and not before habit start date
+        while (sortedDates.contains(currentDate) && !currentDate.isBefore(habitStartDate)) {
             streak++;
             currentDate = currentDate.minusDays(1);
         }
@@ -148,16 +191,23 @@ public class HabitService {
 
     /**
      * Calculate the best (longest) streak in the habit's history.
+     * Only considers dates from the habit's start date onwards.
      */
-    private int calculateBestStreak(List<HabitLog> logs) {
+    private int calculateBestStreak(List<HabitLog> logs, LocalDate habitStartDate) {
         if (logs.isEmpty()) {
             return 0;
         }
 
+        // Filter logs to only include dates from start date onwards
         var sortedDates = logs.stream()
             .map(HabitLog::getCompletedDate)
+            .filter(date -> !date.isBefore(habitStartDate))
             .sorted()
             .collect(Collectors.toList());
+
+        if (sortedDates.isEmpty()) {
+            return 0;
+        }
 
         int currentStreak = 1;
         int bestStreak = 1;

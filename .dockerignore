@@ -1,0 +1,43 @@
+# Maven build artifacts
+target/
+.mvn/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+HELP.md
+docs/
+prompt*.md
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files (opcional, se você não quer incluí-los na imagem)
+# src/test/

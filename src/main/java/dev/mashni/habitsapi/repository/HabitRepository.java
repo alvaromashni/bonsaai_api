@@ -3,6 +3,8 @@ package dev.mashni.habitsapi.repository;
 import dev.mashni.habitsapi.model.Habit;
 import dev.mashni.habitsapi.model.HabitStatus;
 import dev.mashni.habitsapi.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,4 +28,10 @@ public interface HabitRepository extends JpaRepository<Habit, UUID> {
 
     @Query("SELECT h FROM Habit h LEFT JOIN FETCH h.logs WHERE h.id = :id AND h.user = :user")
     Optional<Habit> findByIdAndUserWithLogs(@Param("id") UUID id, @Param("user") User user);
+
+    @Query(value = "SELECT DISTINCT h FROM Habit h LEFT JOIN FETCH h.logs WHERE h.user = :user AND h.status = :status",
+           countQuery = "SELECT COUNT(h) FROM Habit h WHERE h.user = :user AND h.status = :status")
+    Page<Habit> findByUserAndStatusWithLogs(@Param("user") User user, @Param("status") HabitStatus status, Pageable pageable);
+
+    long countByUser(User user);
 }

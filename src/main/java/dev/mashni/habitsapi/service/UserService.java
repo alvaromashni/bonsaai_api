@@ -30,4 +30,9 @@ public class UserService {
         return userRepository.findByGoogleId(googleId.toString())
             .orElseThrow(() -> new IllegalStateException("User not found in database"));
     }
+
+    public User findByEmail(String email) {
+        return userRepository.findByEmail(email)
+            .orElseThrow(() -> new IllegalStateException("User not found in database"));
+    }
 }

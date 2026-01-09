@@ -1,13 +1,10 @@
 package dev.mashni.habitsapi.dto;
 
+import dev.mashni.habitsapi.model.HabitStatus;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDate;
-
-public record CreateHabitRequest(
+public record UpdateHabitRequest(
     @NotBlank(message = "Name is required")
     @Size(min = 1, max = 100, message = "Name must be between 1 and 100 characters")
     String name,
@@ -15,8 +12,6 @@ public record CreateHabitRequest(
     @Size(max = 500, message = "Description must not exceed 500 characters")
     String description,
 
-    @NotNull(message = "Start date is required")
-    @PastOrPresent(message = "Start date cannot be in the future")
-    LocalDate startDate
+    HabitStatus status
 ) {
 }

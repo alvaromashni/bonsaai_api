@@ -6,6 +6,9 @@ import dev.mashni.habitsapi.model.HabitLog;
 import dev.mashni.habitsapi.service.HabitService;
 import dev.mashni.habitsapi.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -27,12 +30,19 @@ public class HabitController {
     }
 
     @PostMapping
-    public ResponseEntity<Habit> createHabit(
+    public ResponseEntity<HabitResponse> createHabit(
             @Valid @RequestBody CreateHabitRequest request,
             Authentication authentication) {
         var user = userService.getUserFromAuthentication(authentication);
         var habit = habitService.createHabit(request, user);
-        return ResponseEntity.status(HttpStatus.CREATED).body(habit);
+        var response = new HabitResponse(
+            habit.getId(),
+            habit.getName(),
+            habit.getDescription(),
+            habit.getStartDate(),
+            habit.getStatus().name()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/{id}/check")
@@ -56,9 +66,13 @@ public class HabitController {
     }
 
     @GetMapping
-    public ResponseEntity<List<HabitSummaryResponse>> getAllActiveHabits(Authentication authentication) {
+    public ResponseEntity<Page<HabitSummaryResponse>> getAllActiveHabits(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         var user = userService.getUserFromAuthentication(authentication);
-        var habits = habitService.getAllActiveHabits(user);
+        Pageable pageable = PageRequest.of(page, size);
+        var habits = habitService.getAllActiveHabits(user, pageable);
         return ResponseEntity.ok(habits);
     }
 
@@ -71,10 +85,42 @@ public class HabitController {
         return ResponseEntity.ok(habit);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<HabitResponse> updateHabit(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateHabitRequest request,
+            Authentication authentication) {
+        var user = userService.getUserFromAuthentication(authentication);
+        var updatedHabit = habitService.updateHabit(id, request, user);
+        var response = new HabitResponse(
+            updatedHabit.getId(),
+            updatedHabit.getName(),
+            updatedHabit.getDescription(),
+            updatedHabit.getStartDate(),
+            updatedHabit.getStatus().name()
+        );
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteHabit(@PathVariable UUID id) {
-        habitService.deleteHabit(id);
+    public ResponseEntity<Void> deleteHabit(@PathVariable UUID id, Authentication authentication) {
+        var user = userService.getUserFromAuthentication(authentication);
+        habitService.deleteHabit(id, user);
         return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}/archive")
+    public ResponseEntity<HabitResponse> archiveHabit(@PathVariable UUID id, Authentication authentication) {
+        var user = userService.getUserFromAuthentication(authentication);
+        var archivedHabit = habitService.archiveHabit(id, user);
+        var response = new HabitResponse(
+            archivedHabit.getId(),
+            archivedHabit.getName(),
+            archivedHabit.getDescription(),
+            archivedHabit.getStartDate(),
+            archivedHabit.getStatus().name()
+        );
+        return ResponseEntity.ok(response);
     }
 
 }

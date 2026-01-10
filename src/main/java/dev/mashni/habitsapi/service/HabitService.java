@@ -77,6 +77,12 @@ public class HabitService {
     }
 
     @Transactional(readOnly = true)
+    public Page<HabitSummaryResponse> getAllArchivedHabits(User user, Pageable pageable) {
+        var habits = habitRepository.findByUserAndStatusWithLogs(user, HabitStatus.ARCHIVED, pageable);
+        return habits.map(this::mapToSummaryResponse);
+    }
+
+    @Transactional(readOnly = true)
     public HabitDetailResponse getHabitDetail(UUID habitId, User user) {
         var habitOpt = habitRepository.findByIdAndUserWithLogs(habitId, user);
 

@@ -76,6 +76,17 @@ public class HabitController {
         return ResponseEntity.ok(habits);
     }
 
+    @GetMapping("/archived")
+    public ResponseEntity<Page<HabitSummaryResponse>> getAllArchivedHabits(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var user = userService.getUserFromAuthentication(authentication);
+        Pageable pageable = PageRequest.of(page, size);
+        var habits = habitService.getAllArchivedHabits(user, pageable);
+        return ResponseEntity.ok(habits);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<HabitDetailResponse> getHabitDetail(
             @PathVariable UUID id,

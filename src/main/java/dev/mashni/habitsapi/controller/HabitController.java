@@ -40,7 +40,9 @@ public class HabitController {
             habit.getName(),
             habit.getDescription(),
             habit.getStartDate(),
-            habit.getStatus().name()
+            habit.getStatus().name(),
+            habit.getFrequencyType(),
+            habit.getTargetDays()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -108,7 +110,9 @@ public class HabitController {
             updatedHabit.getName(),
             updatedHabit.getDescription(),
             updatedHabit.getStartDate(),
-            updatedHabit.getStatus().name()
+            updatedHabit.getStatus().name(),
+            updatedHabit.getFrequencyType(),
+            updatedHabit.getTargetDays()
         );
         return ResponseEntity.ok(response);
     }
@@ -129,7 +133,9 @@ public class HabitController {
             archivedHabit.getName(),
             archivedHabit.getDescription(),
             archivedHabit.getStartDate(),
-            archivedHabit.getStatus().name()
+            archivedHabit.getStatus().name(),
+            archivedHabit.getFrequencyType(),
+            archivedHabit.getTargetDays()
         );
         return ResponseEntity.ok(response);
     }

@@ -2,10 +2,7 @@ package dev.mashni.habitsapi.service;
 
 import dev.mashni.habitsapi.dto.CreateHabitRequest;
 import dev.mashni.habitsapi.dto.HabitSummaryResponse;
-import dev.mashni.habitsapi.model.Habit;
-import dev.mashni.habitsapi.model.HabitLog;
-import dev.mashni.habitsapi.model.HabitStatus;
-import dev.mashni.habitsapi.model.User;
+import dev.mashni.habitsapi.model.*;
 import dev.mashni.habitsapi.repository.HabitLogRepository;
 import dev.mashni.habitsapi.repository.HabitRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,11 +16,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -263,6 +259,109 @@ class HabitServiceTest {
         assertThat(habitsPage.getContent()).hasSize(1);
         assertThat(habitsPage.getContent().get(0).currentStreak()).isEqualTo(1);
         assertThat(habitsPage.getContent().get(0).daysCompleted()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Gym Rat: Habit with SPECIFIC_DAYS (Mon/Wed/Fri) should have streak 3 even with gaps on Tue/Thu")
+    void testCalculateStreak_GymRat_SpecificDaysWithGapForgiveness() {
+        // Arrange: Find the most recent Friday and work backwards
+        LocalDate today = LocalDate.now();
+        LocalDate mostRecentFriday = getMostRecentDayOfWeek(today, DayOfWeek.FRIDAY);
+        LocalDate previousWednesday = mostRecentFriday.minusDays(2); // Wednesday
+        LocalDate previousMonday = mostRecentFriday.minusDays(4);    // Monday
+
+        // Create habit with SPECIFIC_DAYS frequency (Mon, Wed, Fri)
+        Set<DayOfWeek> targetDays = Set.of(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY);
+        Habit gymHabit = new Habit(
+            "Gym",
+            "Go to the gym",
+            previousMonday.minusDays(7), // Start date one week before
+            testUser,
+            FrequencyType.SPECIFIC_DAYS,
+            targetDays
+        );
+        gymHabit.setId(UUID.randomUUID());
+
+        // Check-ins: Monday, Wednesday, Friday (skipping Tuesday and Thursday)
+        var logs = Arrays.asList(
+            createLog(gymHabit, mostRecentFriday),
+            createLog(gymHabit, previousWednesday),
+            createLog(gymHabit, previousMonday)
+        );
+        gymHabit.setLogs(logs);
+
+        Page<Habit> habitPage = new PageImpl<>(List.of(gymHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
+
+        // Act
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
+
+        // Assert
+        assertThat(habitsPage.getContent()).hasSize(1);
+        HabitSummaryResponse habit = habitsPage.getContent().get(0);
+
+        // The streak should be 3 because Tuesday and Thursday are not required days
+        // Gap Forgiveness: non-required days don't break the streak
+        assertThat(habit.currentStreak()).isEqualTo(3);
+        assertThat(habit.daysCompleted()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("SPECIFIC_DAYS habit should break streak when required day is missed")
+    void testCalculateStreak_SpecificDays_BreaksWhenRequiredDayMissed() {
+        // Arrange: Find the most recent Friday and work backwards
+        LocalDate today = LocalDate.now();
+        LocalDate mostRecentFriday = getMostRecentDayOfWeek(today, DayOfWeek.FRIDAY);
+        LocalDate previousWednesday = mostRecentFriday.minusDays(2); // Wednesday
+        LocalDate previousMonday = mostRecentFriday.minusDays(4);    // Monday
+
+        // Create habit with SPECIFIC_DAYS frequency (Mon, Wed, Fri)
+        Set<DayOfWeek> targetDays = Set.of(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY);
+        Habit gymHabit = new Habit(
+            "Gym",
+            "Go to the gym",
+            previousMonday.minusDays(7), // Start date one week before
+            testUser,
+            FrequencyType.SPECIFIC_DAYS,
+            targetDays
+        );
+        gymHabit.setId(UUID.randomUUID());
+
+        // Check-ins: Friday and Monday only (missing Wednesday - a required day!)
+        var logs = Arrays.asList(
+            createLog(gymHabit, mostRecentFriday),
+            // Missing previousWednesday (required day)
+            createLog(gymHabit, previousMonday)
+        );
+        gymHabit.setLogs(logs);
+
+        Page<Habit> habitPage = new PageImpl<>(List.of(gymHabit));
+        when(habitRepository.findByUserAndStatusWithLogs(any(User.class), any(HabitStatus.class), any(Pageable.class)))
+            .thenReturn(habitPage);
+
+        // Act
+        var habitsPage = habitService.getAllActiveHabits(testUser, Pageable.unpaged());
+
+        // Assert
+        assertThat(habitsPage.getContent()).hasSize(1);
+        HabitSummaryResponse habit = habitsPage.getContent().get(0);
+
+        // Streak should be 1 because Wednesday (required day) was missed
+        assertThat(habit.currentStreak()).isEqualTo(1);
+        assertThat(habit.daysCompleted()).isEqualTo(2);
+    }
+
+    /**
+     * Helper method to find the most recent occurrence of a specific day of week.
+     * If today is that day, returns today. Otherwise, returns the most recent past occurrence.
+     */
+    private LocalDate getMostRecentDayOfWeek(LocalDate from, DayOfWeek targetDay) {
+        LocalDate date = from;
+        while (date.getDayOfWeek() != targetDay) {
+            date = date.minusDays(1);
+        }
+        return date;
     }
 
     private HabitLog createLog(Habit habit, LocalDate date) {

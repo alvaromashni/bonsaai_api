@@ -88,7 +88,9 @@ class HabitControllerIntegrationTest {
         var request = new CreateHabitRequest(
             "Read Books",
             "Daily reading habit",
-            LocalDate.now()
+            LocalDate.now(),
+            null,
+            null
         );
 
         // Act & Assert
@@ -114,7 +116,9 @@ class HabitControllerIntegrationTest {
         var request = new CreateHabitRequest(
             "UserA's Habit",
             "This belongs to UserA",
-            LocalDate.now()
+            LocalDate.now(),
+            null,
+            null
         );
 
         mockMvc.perform(post("/api/habits")
@@ -146,7 +150,9 @@ class HabitControllerIntegrationTest {
         var request = new CreateHabitRequest(
             "Private Habit",
             "UserA's private habit",
-            LocalDate.now()
+            LocalDate.now(),
+            null,
+            null
         );
 
         var result = mockMvc.perform(post("/api/habits")
@@ -175,7 +181,9 @@ class HabitControllerIntegrationTest {
         var request = new CreateHabitRequest(
             "Exercise",
             "Daily exercise",
-            LocalDate.now()
+            LocalDate.now(),
+            null,
+            null
         );
 
         var result = mockMvc.perform(post("/api/habits")
@@ -223,7 +231,7 @@ class HabitControllerIntegrationTest {
     @DisplayName("Multiple Users Test: Each user has their own independent habits")
     void testMultipleUsers_IndependentHabits() throws Exception {
         // Arrange & Act: UserA creates habit
-        var requestA = new CreateHabitRequest("Habit A", "Description A", LocalDate.now());
+        var requestA = new CreateHabitRequest("Habit A", "Description A", LocalDate.now(), null, null);
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -231,7 +239,7 @@ class HabitControllerIntegrationTest {
             .andExpect(status().isCreated());
 
         // UserB creates habit
-        var requestB = new CreateHabitRequest("Habit B", "Description B", LocalDate.now());
+        var requestB = new CreateHabitRequest("Habit B", "Description B", LocalDate.now(), null, null);
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userB)))
                 .contentType(MediaType.APPLICATION_JSON)

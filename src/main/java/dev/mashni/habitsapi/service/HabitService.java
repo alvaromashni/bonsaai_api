@@ -1,10 +1,7 @@
 package dev.mashni.habitsapi.service;
 
 import dev.mashni.habitsapi.dto.*;
-import dev.mashni.habitsapi.model.Habit;
-import dev.mashni.habitsapi.model.HabitLog;
-import dev.mashni.habitsapi.model.HabitStatus;
-import dev.mashni.habitsapi.model.User;
+import dev.mashni.habitsapi.model.*;
 import dev.mashni.habitsapi.repository.HabitLogRepository;
 import dev.mashni.habitsapi.repository.HabitRepository;
 import org.springframework.data.domain.Page;
@@ -12,8 +9,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,7 +35,14 @@ public class HabitService {
             throw new IllegalArgumentException("User has reached the maximum limit of 100 habits");
         }
 
-        var habit = new Habit(request.name(), request.description(), request.startDate(), user);
+        var habit = new Habit(
+            request.name(),
+            request.description(),
+            request.startDate(),
+            user,
+            request.frequencyType(),
+            request.targetDays()
+        );
         return habitRepository.save(habit);
     }
 
@@ -97,8 +103,8 @@ public class HabitService {
             .sorted()
             .collect(Collectors.toList());
 
-        var currentStreak = calculateCurrentStreak(logs, habit.getStartDate());
-        var bestStreak = calculateBestStreak(logs, habit.getStartDate());
+        var currentStreak = calculateCurrentStreak(logs, habit);
+        var bestStreak = calculateBestStreak(logs, habit);
 
         return new HabitDetailResponse(
             habit.getId(),
@@ -116,8 +122,8 @@ public class HabitService {
     private HabitSummaryResponse mapToSummaryResponse(Habit habit) {
         // Use logs already fetched with JOIN FETCH to avoid N+1 queries
         var logs = habit.getLogs();
-        var currentStreak = calculateCurrentStreak(logs, habit.getStartDate());
-        var bestStreak = calculateBestStreak(logs, habit.getStartDate());
+        var currentStreak = calculateCurrentStreak(logs, habit);
+        var bestStreak = calculateBestStreak(logs, habit);
 
         return new HabitSummaryResponse(
             habit.getId(),
@@ -160,35 +166,50 @@ public class HabitService {
     }
 
     /**
-     * Calculate the current streak by counting consecutive days backward from today or yesterday.
-     * If today is completed, count from today. Otherwise, count from yesterday.
+     * Calculate the current streak by counting consecutive required days backward from today or yesterday.
+     * For DAILY habits: every day is required.
+     * For SPECIFIC_DAYS habits: only targetDays are required (Gap Forgiveness).
      * Days before the habit's start date are not counted.
      */
-    private int calculateCurrentStreak(List<HabitLog> logs, LocalDate habitStartDate) {
+    private int calculateCurrentStreak(List<HabitLog> logs, Habit habit) {
         if (logs.isEmpty()) {
             return 0;
         }
 
         var today = LocalDate.now();
-        var sortedDates = logs.stream()
+        var completedDates = logs.stream()
             .map(HabitLog::getCompletedDate)
-            .sorted((d1, d2) -> d2.compareTo(d1)) // Sort descending (most recent first)
-            .toList();
+            .collect(Collectors.toSet());
 
         // Start counting from today or yesterday
-        var startDate = sortedDates.contains(today) ? today : today.minusDays(1);
+        var startDate = completedDates.contains(today) ? today : today.minusDays(1);
 
-        // If the most recent log is not today or yesterday, streak is 0
-        if (!sortedDates.contains(startDate) && !sortedDates.contains(today)) {
-            return 0;
+        // If the most recent required day is not completed, streak is 0
+        if (!completedDates.contains(startDate) && !completedDates.contains(today)) {
+            // Check if today or yesterday were required days
+            if (isRequiredDay(today, habit) || isRequiredDay(today.minusDays(1), habit)) {
+                return 0;
+            }
         }
 
         int streak = 0;
         var currentDate = startDate;
 
-        // Count backwards while dates are consecutive and not before habit start date
-        while (sortedDates.contains(currentDate) && !currentDate.isBefore(habitStartDate)) {
-            streak++;
+        // Count backwards while checking required days
+        while (!currentDate.isBefore(habit.getStartDate())) {
+            boolean isRequired = isRequiredDay(currentDate, habit);
+            boolean isCompleted = completedDates.contains(currentDate);
+
+            if (isRequired) {
+                if (isCompleted) {
+                    streak++;
+                } else {
+                    // Required day not completed - streak breaks
+                    break;
+                }
+            }
+            // If not required, continue without incrementing (Gap Forgiveness)
+
             currentDate = currentDate.minusDays(1);
         }
 
@@ -196,39 +217,71 @@ public class HabitService {
     }
 
     /**
+     * Check if a given date is a required day for the habit based on its frequency configuration.
+     * - DAILY: All days are required
+     * - SPECIFIC_DAYS: Only days in targetDays are required
+     */
+    private boolean isRequiredDay(LocalDate date, Habit habit) {
+        if (habit.getFrequencyType() == FrequencyType.DAILY) {
+            return true;
+        } else if (habit.getFrequencyType() == FrequencyType.SPECIFIC_DAYS) {
+            Set<DayOfWeek> targetDays = habit.getTargetDays();
+            if (targetDays == null || targetDays.isEmpty()) {
+                return true; // If no target days specified, treat as daily
+            }
+            return targetDays.contains(date.getDayOfWeek());
+        }
+        return true; // Default to daily
+    }
+
+    /**
      * Calculate the best (longest) streak in the habit's history.
+     * For DAILY habits: counts consecutive days.
+     * For SPECIFIC_DAYS habits: counts consecutive required days with Gap Forgiveness.
      * Only considers dates from the habit's start date onwards.
      */
-    private int calculateBestStreak(List<HabitLog> logs, LocalDate habitStartDate) {
+    private int calculateBestStreak(List<HabitLog> logs, Habit habit) {
         if (logs.isEmpty()) {
             return 0;
         }
 
-        // Filter logs to only include dates from start date onwards
-        var sortedDates = logs.stream()
+        var completedDates = logs.stream()
             .map(HabitLog::getCompletedDate)
-            .filter(date -> !date.isBefore(habitStartDate))
-            .sorted()
-            .collect(Collectors.toList());
+            .filter(date -> !date.isBefore(habit.getStartDate()))
+            .collect(Collectors.toSet());
 
-        if (sortedDates.isEmpty()) {
+        if (completedDates.isEmpty()) {
             return 0;
         }
 
-        int currentStreak = 1;
-        int bestStreak = 1;
+        int bestStreak = 0;
+        int currentStreak = 0;
+        LocalDate streakStartDate = null;
 
-        for (int i = 1; i < sortedDates.size(); i++) {
-            var previousDate = sortedDates.get(i - 1);
-            var currentDate = sortedDates.get(i);
+        // Iterate from start date to today
+        LocalDate currentDate = habit.getStartDate();
+        LocalDate today = LocalDate.now();
 
-            // Check if dates are consecutive
-            if (currentDate.equals(previousDate.plusDays(1))) {
-                currentStreak++;
-                bestStreak = Math.max(bestStreak, currentStreak);
-            } else {
-                currentStreak = 1;
+        while (!currentDate.isAfter(today)) {
+            boolean isRequired = isRequiredDay(currentDate, habit);
+            boolean isCompleted = completedDates.contains(currentDate);
+
+            if (isRequired) {
+                if (isCompleted) {
+                    currentStreak++;
+                    if (streakStartDate == null) {
+                        streakStartDate = currentDate;
+                    }
+                    bestStreak = Math.max(bestStreak, currentStreak);
+                } else {
+                    // Required day not completed - streak breaks
+                    currentStreak = 0;
+                    streakStartDate = null;
+                }
             }
+            // If not required, continue without affecting streak (Gap Forgiveness)
+
+            currentDate = currentDate.plusDays(1);
         }
 
         return bestStreak;

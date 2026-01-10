@@ -4,10 +4,13 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.hibernate.annotations.SQLDelete;
@@ -38,6 +41,16 @@ public class Habit {
     @Column(nullable = false)
     private HabitStatus status = HabitStatus.ACTIVE;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "frequency_type", nullable = false)
+    private FrequencyType frequencyType = FrequencyType.DAILY;
+
+    @ElementCollection(targetClass = DayOfWeek.class)
+    @CollectionTable(name = "habit_target_days", joinColumns = @JoinColumn(name = "habit_id"))
+    @Column(name = "day_of_week")
+    @Enumerated(EnumType.STRING)
+    private Set<DayOfWeek> targetDays = new HashSet<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     @NotNull(message = "User is required")
@@ -58,6 +71,18 @@ public class Habit {
         this.startDate = startDate;
         this.user = user;
         this.status = HabitStatus.ACTIVE;
+        this.frequencyType = FrequencyType.DAILY;
+        this.targetDays = new HashSet<>();
+    }
+
+    public Habit(String name, String description, LocalDate startDate, User user, FrequencyType frequencyType, Set<DayOfWeek> targetDays) {
+        this.name = name;
+        this.description = description;
+        this.startDate = startDate;
+        this.user = user;
+        this.status = HabitStatus.ACTIVE;
+        this.frequencyType = frequencyType != null ? frequencyType : FrequencyType.DAILY;
+        this.targetDays = targetDays != null ? targetDays : new HashSet<>();
     }
 
     // Getters and Setters
@@ -133,5 +158,21 @@ public class Habit {
 
     public void setDeletedAt(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public FrequencyType getFrequencyType() {
+        return frequencyType;
+    }
+
+    public void setFrequencyType(FrequencyType frequencyType) {
+        this.frequencyType = frequencyType;
+    }
+
+    public Set<DayOfWeek> getTargetDays() {
+        return targetDays;
+    }
+
+    public void setTargetDays(Set<DayOfWeek> targetDays) {
+        this.targetDays = targetDays;
     }
 }

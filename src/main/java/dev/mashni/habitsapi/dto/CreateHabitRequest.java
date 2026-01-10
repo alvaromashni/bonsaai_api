@@ -1,11 +1,14 @@
 package dev.mashni.habitsapi.dto;
 
+import dev.mashni.habitsapi.model.FrequencyType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.Set;
 
 public record CreateHabitRequest(
     @NotBlank(message = "Name is required")
@@ -17,6 +20,10 @@ public record CreateHabitRequest(
 
     @NotNull(message = "Start date is required")
     @PastOrPresent(message = "Start date cannot be in the future")
-    LocalDate startDate
+    LocalDate startDate,
+
+    FrequencyType frequencyType,
+
+    Set<DayOfWeek> targetDays
 ) {
 }

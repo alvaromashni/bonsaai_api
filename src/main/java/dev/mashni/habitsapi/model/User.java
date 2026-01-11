@@ -36,6 +36,10 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_plan", nullable = false)
+    private UserPlan userPlan = UserPlan.FREE;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Habit> habits = new ArrayList<>();
 
@@ -108,5 +112,13 @@ public class User {
 
     public void setHabits(List<Habit> habits) {
         this.habits = habits;
+    }
+
+    public UserPlan getUserPlan() {
+        return userPlan;
+    }
+
+    public void setUserPlan(UserPlan userPlan) {
+        this.userPlan = userPlan;
     }
 }

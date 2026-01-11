@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,8 +33,11 @@ import java.util.function.Supplier;
  * Implements hybrid logic:
  * - Authenticated users: 100 req/min (keyed by userId)
  * - Anonymous users: 20 req/min (keyed by IP address from X-Forwarded-For)
+ *
+ * NOTE: Disabled in test profile to avoid Redis connection requirements during tests
  */
 @Configuration
+@Profile("!test")
 public class RateLimitConfig {
 
     @Value("${REDIS_URL}")
@@ -63,6 +67,7 @@ public class RateLimitConfig {
      */
     @Component
     @Order(1)
+    @Profile("!test")
     public static class RateLimitFilter implements Filter {
 
         private final ProxyManager<String> proxyManager;

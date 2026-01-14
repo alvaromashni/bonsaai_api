@@ -6,6 +6,7 @@ public record UserResponse(
         UUID id,
         String name,
         String email,
-        String avatarUrl
+        String avatarUrl,
+        UserPlan userPlan
 ) {
 }

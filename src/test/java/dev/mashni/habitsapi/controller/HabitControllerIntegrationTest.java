@@ -78,7 +78,7 @@ class HabitControllerIntegrationTest {
         mockMvc.perform(get("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$").isArray());
+            .andExpect(jsonPath("$.content").isArray());
     }
 
     @Test
@@ -131,16 +131,16 @@ class HabitControllerIntegrationTest {
         mockMvc.perform(get("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userB))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$").isArray())
-            .andExpect(jsonPath("$").isEmpty());
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.content").isEmpty());
 
         // Verify: UserA can still see their habit
         mockMvc.perform(get("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$").isArray())
-            .andExpect(jsonPath("$.length()").value(1))
-            .andExpect(jsonPath("$[0].name").value("UserA's Habit"));
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("UserA's Habit"));
     }
 
     @Test
@@ -250,15 +250,15 @@ class HabitControllerIntegrationTest {
         mockMvc.perform(get("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(1))
-            .andExpect(jsonPath("$[0].name").value("Habit A"));
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("Habit A"));
 
         // Assert: UserB sees only their habit
         mockMvc.perform(get("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userB))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(1))
-            .andExpect(jsonPath("$[0].name").value("Habit B"));
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("Habit B"));
 
         // Verify total in database
         var allHabits = habitRepository.findAll();

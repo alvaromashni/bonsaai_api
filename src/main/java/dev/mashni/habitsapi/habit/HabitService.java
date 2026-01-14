@@ -183,19 +183,31 @@ public class HabitService {
             .map(HabitLog::getCompletedDate)
             .collect(Collectors.toSet());
 
-        // Start counting from today or yesterday
-        var startDate = completedDates.contains(today) ? today : today.minusDays(1);
+        // Find the most recent required day that should have been completed
+        LocalDate lastRequiredDay = findLastRequiredDay(today, habit);
 
-        // If the most recent required day is not completed, streak is 0
-        if (!completedDates.contains(startDate) && !completedDates.contains(today)) {
-            // Check if today or yesterday were required days
-            if (isRequiredDay(today, habit) || isRequiredDay(today.minusDays(1), habit)) {
+        // Determine the starting point for streak calculation
+        LocalDate streakStartDate;
+        if (completedDates.contains(lastRequiredDay)) {
+            // Last required day was completed - start from there
+            streakStartDate = lastRequiredDay;
+        } else {
+            // Last required day was NOT completed
+            // Check if the previous required day was completed (allow 1-day grace)
+            LocalDate previousRequiredDay = findLastRequiredDay(lastRequiredDay.minusDays(1), habit);
+
+            if (completedDates.contains(previousRequiredDay)) {
+                // Previous required day was completed - start from there
+                streakStartDate = previousRequiredDay;
+            } else {
+                // Neither last nor previous required day completed - no streak
                 return 0;
             }
         }
 
+        // Count backwards from the determined start date
         int streak = 0;
-        var currentDate = startDate;
+        var currentDate = streakStartDate;
 
         // Count backwards while checking required days
         while (!currentDate.isBefore(habit.getStartDate())) {
@@ -216,6 +228,31 @@ public class HabitService {
         }
 
         return streak;
+    }
+
+    /**
+     * Find the most recent required day (today or in the past) based on habit's frequency.
+     * For DAILY habits: returns today.
+     * For SPECIFIC_DAYS habits: returns the most recent day that matches targetDays.
+     */
+    private LocalDate findLastRequiredDay(LocalDate from, Habit habit) {
+        LocalDate currentDate = from;
+
+        // For DAILY habits, every day is required
+        if (habit.getFrequencyType() == FrequencyType.DAILY) {
+            return currentDate;
+        }
+
+        // For SPECIFIC_DAYS, find the most recent required day
+        while (!currentDate.isBefore(habit.getStartDate())) {
+            if (isRequiredDay(currentDate, habit)) {
+                return currentDate;
+            }
+            currentDate = currentDate.minusDays(1);
+        }
+
+        // If no required day found, return start date
+        return habit.getStartDate();
     }
 
     /**

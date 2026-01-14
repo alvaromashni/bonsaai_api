@@ -1,10 +1,12 @@
 package dev.mashni.habitsapi.service;
 
-import dev.mashni.habitsapi.dto.CreateHabitRequest;
-import dev.mashni.habitsapi.dto.HabitSummaryResponse;
-import dev.mashni.habitsapi.model.*;
-import dev.mashni.habitsapi.repository.HabitLogRepository;
-import dev.mashni.habitsapi.repository.HabitRepository;
+import dev.mashni.habitsapi.habit.dto.HabitSummaryResponse;
+import dev.mashni.habitsapi.habit.*;
+import dev.mashni.habitsapi.habit.model.FrequencyType;
+import dev.mashni.habitsapi.habit.model.Habit;
+import dev.mashni.habitsapi.habit.model.HabitLog;
+import dev.mashni.habitsapi.habit.model.HabitStatus;
+import dev.mashni.habitsapi.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +21,6 @@ import org.springframework.data.domain.Pageable;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

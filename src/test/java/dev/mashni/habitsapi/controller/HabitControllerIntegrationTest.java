@@ -1,10 +1,10 @@
 package dev.mashni.habitsapi.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mashni.habitsapi.dto.CreateHabitRequest;
-import dev.mashni.habitsapi.model.User;
-import dev.mashni.habitsapi.repository.HabitRepository;
-import dev.mashni.habitsapi.repository.UserRepository;
+import dev.mashni.habitsapi.habit.dto.CreateHabitRequest;
+import dev.mashni.habitsapi.user.User;
+import dev.mashni.habitsapi.habit.HabitRepository;
+import dev.mashni.habitsapi.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

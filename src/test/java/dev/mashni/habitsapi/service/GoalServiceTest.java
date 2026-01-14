@@ -1,11 +1,16 @@
 package dev.mashni.habitsapi.service;
 
-import dev.mashni.habitsapi.dto.CreateGoalRequest;
-import dev.mashni.habitsapi.dto.GoalSummaryResponse;
-import dev.mashni.habitsapi.dto.UpdateGoalHabitsRequest;
-import dev.mashni.habitsapi.model.*;
-import dev.mashni.habitsapi.repository.GoalRepository;
-import dev.mashni.habitsapi.repository.HabitRepository;
+import dev.mashni.habitsapi.goal.dto.CreateGoalRequest;
+import dev.mashni.habitsapi.goal.dto.GoalSummaryResponse;
+import dev.mashni.habitsapi.goal.dto.UpdateGoalHabitsRequest;
+import dev.mashni.habitsapi.goal.Goal;
+import dev.mashni.habitsapi.goal.GoalService;
+import dev.mashni.habitsapi.goal.GoalStatus;
+import dev.mashni.habitsapi.habit.model.Habit;
+import dev.mashni.habitsapi.goal.GoalRepository;
+import dev.mashni.habitsapi.habit.HabitRepository;
+import dev.mashni.habitsapi.user.User;
+import dev.mashni.habitsapi.user.UserPlan;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,12 +1,12 @@
 package dev.mashni.habitsapi.controller;
 
-import dev.mashni.habitsapi.model.Habit;
-import dev.mashni.habitsapi.model.HabitLog;
-import dev.mashni.habitsapi.model.User;
-import dev.mashni.habitsapi.model.UserPlan;
-import dev.mashni.habitsapi.repository.HabitLogRepository;
-import dev.mashni.habitsapi.repository.HabitRepository;
-import dev.mashni.habitsapi.repository.UserRepository;
+import dev.mashni.habitsapi.habit.model.Habit;
+import dev.mashni.habitsapi.habit.model.HabitLog;
+import dev.mashni.habitsapi.user.User;
+import dev.mashni.habitsapi.user.UserPlan;
+import dev.mashni.habitsapi.habit.HabitLogRepository;
+import dev.mashni.habitsapi.habit.HabitRepository;
+import dev.mashni.habitsapi.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -87,11 +87,16 @@ class AnalyticsControllerIntegrationTest {
         mockMvc.perform(get("/api/analytics")
                 .with(oauth2Login().oauth2User(createOAuth2User(proUser))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.globalCompletionRate").exists())
-            .andExpect(jsonPath("$.totalHabitsCompleted").exists())
-            .andExpect(jsonPath("$.currentStreak").exists())
-            .andExpect(jsonPath("$.longestStreak").exists())
-            .andExpect(jsonPath("$.heatmap").isArray());
+            .andExpect(jsonPath("$.kpis").exists())
+            .andExpect(jsonPath("$.kpis.completionRate.value").exists())
+            .andExpect(jsonPath("$.kpis.completionRate.trend").exists())
+            .andExpect(jsonPath("$.kpis.totalHabits.value").exists())
+            .andExpect(jsonPath("$.kpis.totalHabits.trend").exists())
+            .andExpect(jsonPath("$.kpis.currentStreak.value").exists())
+            .andExpect(jsonPath("$.kpis.currentStreak.trend").exists())
+            .andExpect(jsonPath("$.heatmapSeries").isArray())
+            .andExpect(jsonPath("$.radarSeries").isArray())
+            .andExpect(jsonPath("$.radarSeries.length()").value(7)); // 7 days of week
     }
 
     @Test
@@ -109,10 +114,11 @@ class AnalyticsControllerIntegrationTest {
         mockMvc.perform(get("/api/analytics")
                 .with(oauth2Login().oauth2User(createOAuth2User(proUser))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalHabitsCompleted").value(3))
-            .andExpect(jsonPath("$.currentStreak").value(3))
-            .andExpect(jsonPath("$.longestStreak").value(3))
-            .andExpect(jsonPath("$.heatmap").isArray());
+            .andExpect(jsonPath("$.kpis.totalHabits.value").value(3))
+            .andExpect(jsonPath("$.kpis.currentStreak.value").value(3))
+            .andExpect(jsonPath("$.heatmapSeries").isArray())
+            .andExpect(jsonPath("$.radarSeries").isArray())
+            .andExpect(jsonPath("$.radarSeries.length()").value(7));
     }
 
     private OAuth2User createOAuth2User(User user) {

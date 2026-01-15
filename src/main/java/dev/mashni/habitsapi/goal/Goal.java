@@ -56,6 +56,9 @@ public class Goal {
     )
     private Set<Habit> habits = new HashSet<>();
 
+    @OneToMany(mappedBy = "goal", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private Set<GoalCheckpoint> checkpoints = new HashSet<>();
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -151,6 +154,14 @@ public class Goal {
         this.habits = habits;
     }
 
+    public Set<GoalCheckpoint> getCheckpoints() {
+        return checkpoints;
+    }
+
+    public void setCheckpoints(Set<GoalCheckpoint> checkpoints) {
+        this.checkpoints = checkpoints;
+    }
+
     // Helper methods
     public void addHabit(Habit habit) {
         this.habits.add(habit);
@@ -158,5 +169,15 @@ public class Goal {
 
     public void removeHabit(Habit habit) {
         this.habits.remove(habit);
+    }
+
+    public void addCheckpoint(GoalCheckpoint checkpoint) {
+        this.checkpoints.add(checkpoint);
+        checkpoint.setGoal(this);
+    }
+
+    public void removeCheckpoint(GoalCheckpoint checkpoint) {
+        this.checkpoints.remove(checkpoint);
+        checkpoint.setGoal(null);
     }
 }

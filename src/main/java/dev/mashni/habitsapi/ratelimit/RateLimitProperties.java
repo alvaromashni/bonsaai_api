@@ -3,35 +3,46 @@ package dev.mashni.habitsapi.ratelimit;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 @Configuration
 @ConfigurationProperties(prefix = "rate-limit")
 public class RateLimitProperties {
 
-    private int freeUserRequestsPerHour = 100;
-    private int proUserRequestsPerHour = 1000;
-    private int unauthenticatedRequestsPerHour = 50;
+    private int freeUserRequests = 100;
+    private int proUserRequests = 1000;
+    private int unauthenticatedRequests = 50;
+    private Duration windowDuration = Duration.ofHours(1);
 
-    public int getFreeUserRequestsPerHour() {
-        return freeUserRequestsPerHour;
+    public int getFreeUserRequests() {
+        return freeUserRequests;
     }
 
-    public void setFreeUserRequestsPerHour(int freeUserRequestsPerHour) {
-        this.freeUserRequestsPerHour = freeUserRequestsPerHour;
+    public void setFreeUserRequests(int freeUserRequests) {
+        this.freeUserRequests = freeUserRequests;
     }
 
-    public int getProUserRequestsPerHour() {
-        return proUserRequestsPerHour;
+    public int getProUserRequests() {
+        return proUserRequests;
     }
 
-    public void setProUserRequestsPerHour(int proUserRequestsPerHour) {
-        this.proUserRequestsPerHour = proUserRequestsPerHour;
+    public void setProUserRequests(int proUserRequests) {
+        this.proUserRequests = proUserRequests;
     }
 
-    public int getUnauthenticatedRequestsPerHour() {
-        return unauthenticatedRequestsPerHour;
+    public int getUnauthenticatedRequests() {
+        return unauthenticatedRequests;
     }
 
-    public void setUnauthenticatedRequestsPerHour(int unauthenticatedRequestsPerHour) {
-        this.unauthenticatedRequestsPerHour = unauthenticatedRequestsPerHour;
+    public void setUnauthenticatedRequests(int unauthenticatedRequests) {
+        this.unauthenticatedRequests = unauthenticatedRequests;
+    }
+
+    public Duration getWindowDuration() {
+        return windowDuration;
+    }
+
+    public void setWindowDuration(Duration windowDuration) {
+        this.windowDuration = windowDuration;
     }
 }

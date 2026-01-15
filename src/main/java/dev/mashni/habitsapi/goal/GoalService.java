@@ -1,5 +1,6 @@
 package dev.mashni.habitsapi.goal;
 
+import dev.mashni.habitsapi.goal.dto.CheckpointResponse;
 import dev.mashni.habitsapi.goal.dto.CreateGoalRequest;
 import dev.mashni.habitsapi.goal.dto.GoalDetailResponse;
 import dev.mashni.habitsapi.goal.dto.GoalSummaryResponse;
@@ -12,6 +13,7 @@ import dev.mashni.habitsapi.user.UserPlan;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -56,11 +58,16 @@ public class GoalService {
 
     @Transactional(readOnly = true)
     public GoalDetailResponse getGoalDetail(UUID goalId, User user) {
-        var goal = goalRepository.findByIdAndUserWithHabits(goalId, user)
+        var goal = goalRepository.findByIdAndUserWithHabitsAndCheckpoints(goalId, user)
                 .orElseThrow(() -> new IllegalArgumentException("Goal not found or does not belong to user"));
 
         var habitResponses = goal.getHabits().stream()
                 .map(this::mapHabitToSummary)
+                .collect(Collectors.toList());
+
+        var checkpointResponses = goal.getCheckpoints().stream()
+                .sorted(Comparator.comparing(GoalCheckpoint::getDate).reversed())
+                .map(this::mapCheckpointToResponse)
                 .collect(Collectors.toList());
 
         return new GoalDetailResponse(
@@ -70,6 +77,7 @@ public class GoalService {
                 goal.getDeadline(),
                 goal.getStatus(),
                 habitResponses,
+                checkpointResponses,
                 goal.getCreatedAt(),
                 goal.getUpdatedAt()
         );
@@ -159,6 +167,15 @@ public class GoalService {
                 0, // currentStreak - not calculated here to avoid N+1
                 0, // bestStreak - not calculated here to avoid N+1
                 habit.getLogs().size()
+        );
+    }
+
+    private CheckpointResponse mapCheckpointToResponse(GoalCheckpoint checkpoint) {
+        return new CheckpointResponse(
+                checkpoint.getId(),
+                checkpoint.getNote(),
+                checkpoint.getEmoji(),
+                checkpoint.getDate()
         );
     }
 }

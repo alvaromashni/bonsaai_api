@@ -30,6 +30,12 @@ public interface GoalRepository extends JpaRepository<Goal, UUID> {
     Optional<Goal> findByIdAndUserWithHabits(@Param("id") UUID id, @Param("user") User user);
 
     /**
+     * Find a goal by ID and user with habits and checkpoints eagerly loaded.
+     */
+    @Query("SELECT DISTINCT g FROM Goal g LEFT JOIN FETCH g.habits LEFT JOIN FETCH g.checkpoints WHERE g.id = :id AND g.user = :user")
+    Optional<Goal> findByIdAndUserWithHabitsAndCheckpoints(@Param("id") UUID id, @Param("user") User user);
+
+    /**
      * Count goals for a specific user (for FREE plan limit validation).
      */
     long countByUser(User user);

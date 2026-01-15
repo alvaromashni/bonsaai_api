@@ -9,7 +9,7 @@ import java.util.UUID;
 
 /**
  * Detailed response DTO for goals (used in detail views).
- * Contains full goal information including linked habits.
+ * Contains full goal information including linked habits and checkpoints.
  */
 public record GoalDetailResponse(
     UUID id,
@@ -18,6 +18,7 @@ public record GoalDetailResponse(
     LocalDateTime deadline,
     GoalStatus status,
     List<HabitSummaryResponse> habits,
+    List<CheckpointResponse> checkpoints,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {

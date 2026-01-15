@@ -252,7 +252,7 @@ class GoalServiceTest {
         testGoal.addHabit(testHabit1);
         testGoal.addHabit(testHabit2);
 
-        when(goalRepository.findByIdAndUserWithHabits(testGoal.getId(), freeUser))
+        when(goalRepository.findByIdAndUserWithHabitsAndCheckpoints(testGoal.getId(), freeUser))
                 .thenReturn(Optional.of(testGoal));
 
         // Act
@@ -263,6 +263,7 @@ class GoalServiceTest {
         assertThat(result.id()).isEqualTo(testGoal.getId());
         assertThat(result.title()).isEqualTo("Lose 10kg");
         assertThat(result.habits()).hasSize(2);
+        assertThat(result.checkpoints()).isEmpty();
     }
 
     @Test
@@ -270,7 +271,7 @@ class GoalServiceTest {
     void testGetGoalDetail_NotFound_ThrowsException() {
         // Arrange
         UUID invalidId = UUID.randomUUID();
-        when(goalRepository.findByIdAndUserWithHabits(invalidId, freeUser))
+        when(goalRepository.findByIdAndUserWithHabitsAndCheckpoints(invalidId, freeUser))
                 .thenReturn(Optional.empty());
 
         // Act & Assert

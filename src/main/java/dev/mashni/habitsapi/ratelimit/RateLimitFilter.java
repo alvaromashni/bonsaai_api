@@ -17,6 +17,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Rate limiting filter that applies to all /api/** endpoints.
+ * Uses different limits based on user authentication status and plan:
+ * - PRO users: Higher limit (configurable)
+ * - FREE users: Standard limit (configurable)
+ * - Unauthenticated: Lowest limit (configurable)
+ */
 @Component
 @Order(1)
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -30,69 +37,94 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return !path.startsWith("/api/");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-        throws ServletException, IOException {
+            throws ServletException, IOException {
 
-        // Skip rate limiting for actuator endpoints
-        String requestURI = request.getRequestURI();
-        if (requestURI.startsWith("/actuator")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Bucket bucket;
-        String key;
-
-        if (authentication != null && authentication.isAuthenticated()
-            && !"anonymousUser".equals(authentication.getPrincipal())) {
-            // Authenticated user - get user and their plan
-            try {
-                User user = userService.getUserFromAuthentication(authentication);
-                key = user.getEmail();
-                UserPlan userPlan = user.getUserPlan() != null ? user.getUserPlan() : UserPlan.FREE;
-                bucket = rateLimitService.resolveBucket(key, userPlan);
-            } catch (Exception e) {
-                // If we can't get the user, treat as unauthenticated
-                key = getClientIP(request);
-                bucket = rateLimitService.resolveBucketForUnauthenticated(key);
-            }
-        } else {
-            // Unauthenticated user - use IP address
-            key = getClientIP(request);
-            bucket = rateLimitService.resolveBucketForUnauthenticated(key);
-        }
+        String key = resolveKey(request);
+        Bucket bucket = resolveBucket(request, key);
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
         if (probe.isConsumed()) {
-            // Add rate limit headers
-            response.addHeader("X-Rate-Limit-Remaining", String.valueOf(probe.getRemainingTokens()));
-            response.addHeader("X-Rate-Limit-Retry-After-Seconds",
-                String.valueOf(probe.getNanosToWaitForRefill() / 1_000_000_000));
+            addRateLimitHeaders(response, probe);
             filterChain.doFilter(request, response);
         } else {
-            // Rate limit exceeded
-            response.setStatus(429);
-            response.setContentType("application/json");
-            response.addHeader("X-Rate-Limit-Retry-After-Seconds",
-                String.valueOf(probe.getNanosToWaitForRefill() / 1_000_000_000));
-            response.getWriter().write(
-                String.format("{\"error\":\"Too many requests\",\"retryAfterSeconds\":%d}",
-                    probe.getNanosToWaitForRefill() / 1_000_000_000)
-            );
+            handleRateLimitExceeded(response, probe);
         }
     }
 
-    private String getClientIP(HttpServletRequest request) {
+    private String resolveKey(HttpServletRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (isAuthenticated(auth)) {
+            try {
+                User user = userService.getUserFromAuthentication(auth);
+                return "user:" + user.getId();
+            } catch (Exception e) {
+                // Fallback to IP if user resolution fails
+            }
+        }
+
+        return "ip:" + extractClientIp(request);
+    }
+
+    private Bucket resolveBucket(HttpServletRequest request, String key) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (isAuthenticated(auth)) {
+            try {
+                User user = userService.getUserFromAuthentication(auth);
+                UserPlan plan = user.getUserPlan() != null ? user.getUserPlan() : UserPlan.FREE;
+                return rateLimitService.resolveBucket(key, plan);
+            } catch (Exception e) {
+                // Fallback to unauthenticated bucket
+            }
+        }
+
+        return rateLimitService.resolveBucketForUnauthenticated(key);
+    }
+
+    private boolean isAuthenticated(Authentication auth) {
+        return auth != null
+                && auth.isAuthenticated()
+                && !"anonymousUser".equals(auth.getPrincipal());
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
             return xForwardedFor.split(",")[0].trim();
         }
-        String xRealIP = request.getHeader("X-Real-IP");
-        if (xRealIP != null && !xRealIP.isEmpty()) {
-            return xRealIP;
+
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isEmpty()) {
+            return xRealIp;
         }
+
         return request.getRemoteAddr();
+    }
+
+    private void addRateLimitHeaders(HttpServletResponse response, ConsumptionProbe probe) {
+        response.addHeader("X-Rate-Limit-Remaining", String.valueOf(probe.getRemainingTokens()));
+        long retryAfterSeconds = probe.getNanosToWaitForRefill() / 1_000_000_000;
+        response.addHeader("X-Rate-Limit-Retry-After-Seconds", String.valueOf(retryAfterSeconds));
+    }
+
+    private void handleRateLimitExceeded(HttpServletResponse response, ConsumptionProbe probe) throws IOException {
+        long retryAfterSeconds = probe.getNanosToWaitForRefill() / 1_000_000_000;
+
+        response.setStatus(429);
+        response.setContentType("application/json");
+        response.addHeader("X-Rate-Limit-Retry-After-Seconds", String.valueOf(retryAfterSeconds));
+        response.getWriter().write(String.format(
+                "{\"error\":\"Too many requests\",\"status\":429,\"message\":\"Rate limit exceeded. Please try again later.\",\"retryAfterSeconds\":%d}",
+                retryAfterSeconds
+        ));
     }
 }

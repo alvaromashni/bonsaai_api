@@ -1,5 +1,6 @@
 package dev.mashni.habitsapi.habit.model;
 
+import dev.mashni.habitsapi.challenge.model.Challenge;
 import dev.mashni.habitsapi.user.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -62,6 +63,10 @@ public class Habit {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "challenge_id")
+    private Challenge challenge;
 
     public Habit() {
     }
@@ -175,5 +180,13 @@ public class Habit {
 
     public void setTargetDays(Set<DayOfWeek> targetDays) {
         this.targetDays = targetDays;
+    }
+
+    public Challenge getChallenge() {
+        return challenge;
+    }
+
+    public void setChallenge(Challenge challenge) {
+        this.challenge = challenge;
     }
 }

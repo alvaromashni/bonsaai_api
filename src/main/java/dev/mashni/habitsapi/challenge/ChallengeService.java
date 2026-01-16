@@ -2,9 +2,11 @@ package dev.mashni.habitsapi.challenge;
 
 import dev.mashni.habitsapi.challenge.dto.*;
 import dev.mashni.habitsapi.challenge.model.Challenge;
+import dev.mashni.habitsapi.habit.HabitLogRepository;
 import dev.mashni.habitsapi.habit.HabitRepository;
 import dev.mashni.habitsapi.habit.model.FrequencyType;
 import dev.mashni.habitsapi.habit.model.Habit;
+import dev.mashni.habitsapi.habit.model.HabitLog;
 import dev.mashni.habitsapi.user.User;
 import dev.mashni.habitsapi.user.UserPlan;
 import org.springframework.stereotype.Service;
@@ -24,10 +26,12 @@ public class ChallengeService {
 
     private final ChallengeRepository challengeRepository;
     private final HabitRepository habitRepository;
+    private final HabitLogRepository habitLogRepository;
 
-    public ChallengeService(ChallengeRepository challengeRepository, HabitRepository habitRepository) {
+    public ChallengeService(ChallengeRepository challengeRepository, HabitRepository habitRepository, HabitLogRepository habitLogRepository) {
         this.challengeRepository = challengeRepository;
         this.habitRepository = habitRepository;
+        this.habitLogRepository = habitLogRepository;
     }
 
     @Transactional
@@ -141,6 +145,63 @@ public class ChallengeService {
         return challenges.stream()
                 .map(c -> mapToChallengeResponse(c, challengeRepository.countParticipants(c)))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Check-in for a challenge. Marks the user's habit as completed for the specified date.
+     * If already checked in, it will toggle (uncheck).
+     *
+     * @param challengeId The challenge ID
+     * @param date The date to check-in (null = today)
+     * @param user The current user
+     * @return CheckInResponse with the result
+     */
+    @Transactional
+    public CheckInResponse checkIn(UUID challengeId, LocalDate date, User user) {
+        // Validate user is a participant
+        if (!challengeRepository.isUserParticipant(challengeId, user)) {
+            throw new IllegalArgumentException("You are not a participant in this challenge");
+        }
+
+        // Get the challenge
+        var challenge = challengeRepository.findById(challengeId)
+                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+
+        // Get the user's habit for this challenge
+        var habit = habitRepository.findByChallengeAndUser(challengeId, user.getId())
+                .orElseThrow(() -> new IllegalStateException("User habit not found for this challenge"));
+
+        // Use today if date is null
+        LocalDate checkDate = date != null ? date : LocalDate.now();
+
+        // Validate date is not before challenge start date
+        if (checkDate.isBefore(challenge.getStartDate())) {
+            throw new IllegalArgumentException("Cannot check-in before the challenge start date");
+        }
+
+        // Validate date is not in the future
+        if (checkDate.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("Cannot check-in for future dates");
+        }
+
+        // Validate date is not after challenge end date (if set)
+        if (challenge.getEndDate() != null && checkDate.isAfter(challenge.getEndDate())) {
+            throw new IllegalArgumentException("Cannot check-in after the challenge end date");
+        }
+
+        // Check if already checked in for this date (toggle behavior)
+        var existingLog = habitLogRepository.findByHabitIdAndCompletedDate(habit.getId(), checkDate);
+
+        if (existingLog.isPresent()) {
+            // Toggle: remove the check-in
+            habitLogRepository.delete(existingLog.get());
+            return new CheckInResponse(false, checkDate, "Check-in removed for " + checkDate);
+        } else {
+            // Create new check-in
+            var log = new HabitLog(habit, checkDate);
+            habitLogRepository.save(log);
+            return new CheckInResponse(true, checkDate, "Checked in for " + checkDate);
+        }
     }
 
     /**

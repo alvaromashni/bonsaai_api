@@ -75,4 +75,20 @@ public class ChallengeController {
         var response = challengeService.getChallengeDetail(id, user);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Check-in for a challenge (mark habit as completed).
+     * Toggle behavior: if already checked in, it will uncheck.
+     * Only participants can check-in.
+     */
+    @PostMapping("/{id}/check-in")
+    public ResponseEntity<CheckInResponse> checkIn(
+            @PathVariable UUID id,
+            @RequestBody(required = false) CheckInRequest request,
+            Authentication authentication) {
+        var user = userService.getUserFromAuthentication(authentication);
+        var date = request != null ? request.date() : null;
+        var response = challengeService.checkIn(id, date, user);
+        return ResponseEntity.ok(response);
+    }
 }

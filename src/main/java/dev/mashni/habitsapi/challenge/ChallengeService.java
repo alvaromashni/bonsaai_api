@@ -113,6 +113,11 @@ public class ChallengeService {
 
         int participantCount = challengeRepository.countParticipants(challenge);
 
+        // Get the current user's habit ID for this challenge
+        UUID currentUserHabitId = habitRepository.findByChallengeAndUser(challengeId, user.getId())
+                .map(habit -> habit.getId())
+                .orElse(null);
+
         return new ChallengeDetailResponse(
                 challenge.getId(),
                 challenge.getName(),
@@ -125,7 +130,8 @@ public class ChallengeService {
                 challenge.getCreator().getName(),
                 participantCount,
                 todayCompletionRate,
-                leaderboard
+                leaderboard,
+                currentUserHabitId
         );
     }
 

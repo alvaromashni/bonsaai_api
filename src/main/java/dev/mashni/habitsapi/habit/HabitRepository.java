@@ -34,4 +34,7 @@ public interface HabitRepository extends JpaRepository<Habit, UUID> {
     Page<Habit> findByUserAndStatusWithLogs(@Param("user") User user, @Param("status") HabitStatus status, Pageable pageable);
 
     long countByUser(User user);
+
+    @Query("SELECT h FROM Habit h WHERE h.challenge.id = :challengeId AND h.user.id = :userId")
+    Optional<Habit> findByChallengeAndUser(@Param("challengeId") UUID challengeId, @Param("userId") UUID userId);
 }

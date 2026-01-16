@@ -17,5 +17,6 @@ public record ChallengeDetailResponse(
     String creatorName,
     int participantCount,
     double todayCompletionRate,
-    List<LeaderboardEntryResponse> leaderboard
+    List<LeaderboardEntryResponse> leaderboard,
+    UUID currentUserHabitId
 ) {}

@@ -1,11 +1,16 @@
 package dev.mashni.habitsapi.user;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserService {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
 
@@ -32,5 +37,13 @@ public class UserService {
     public User findByEmail(String email) {
         return userRepository.findByEmail(email)
             .orElseThrow(() -> new IllegalStateException("User not found in database"));
+    }
+
+    @Transactional
+    public void upgradeToPro(User user, int durationInDays) {
+        logger.info("Upgrading user {} to PRO for {} days", user.getId(), durationInDays);
+        user.setUserPlan(UserPlan.PRO);
+        userRepository.save(user);
+        logger.info("User {} upgraded to PRO successfully", user.getId());
     }
 }

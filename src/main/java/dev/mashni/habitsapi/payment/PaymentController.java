@@ -37,9 +37,11 @@ public class PaymentController {
 
     @GetMapping("/{paymentId}/status")
     public ResponseEntity<PaymentStatusResponse> getPaymentStatus(
-            @PathVariable UUID paymentId) {
+            @PathVariable UUID paymentId,
+            Authentication authentication) {
 
-        PaymentStatusResponse response = paymentService.getPaymentStatus(paymentId);
+        User user = userService.getUserFromAuthentication(authentication);
+        PaymentStatusResponse response = paymentService.getPaymentStatus(paymentId, user.getId());
         return ResponseEntity.ok(response);
     }
 }

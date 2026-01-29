@@ -5,7 +5,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record WooviWebhookPayload(
     String event,
-    Charge charge
+    Charge charge,
+    String pixTransactionID
 ) {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Charge(

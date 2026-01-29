@@ -1,17 +1,16 @@
 package dev.mashni.habitsapi.payment;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mashni.habitsapi.payment.client.WooviClient;
 import dev.mashni.habitsapi.payment.dto.CheckoutResponse;
 import dev.mashni.habitsapi.payment.dto.PaymentStatusResponse;
-import dev.mashni.habitsapi.payment.dto.WooviChargeRequest;
-import dev.mashni.habitsapi.payment.dto.WooviChargeResponse;
+import dev.mashni.habitsapi.payment.gateway.ChargeRequest;
+import dev.mashni.habitsapi.payment.gateway.ChargeResponse;
+import dev.mashni.habitsapi.payment.gateway.PaymentGateway;
 import dev.mashni.habitsapi.payment.model.Payment;
-import dev.mashni.habitsapi.payment.model.PaymentStatus;
 import dev.mashni.habitsapi.payment.model.PlanPrice;
+import dev.mashni.habitsapi.payment.webhook.WebhookProcessor;
+import dev.mashni.habitsapi.payment.webhook.WebhookResult;
+import dev.mashni.habitsapi.shared.exception.ResourceNotFoundException;
 import dev.mashni.habitsapi.user.User;
-import dev.mashni.habitsapi.user.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,19 +24,16 @@ public class PaymentService {
     private static final Logger logger = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepository;
-    private final WooviClient wooviClient;
-    private final UserService userService;
-    private final ObjectMapper objectMapper;
+    private final PaymentGateway paymentGateway;
+    private final WebhookProcessor webhookProcessor;
 
     public PaymentService(
             PaymentRepository paymentRepository,
-            WooviClient wooviClient,
-            UserService userService,
-            ObjectMapper objectMapper) {
+            PaymentGateway paymentGateway,
+            WebhookProcessor webhookProcessor) {
         this.paymentRepository = paymentRepository;
-        this.wooviClient = wooviClient;
-        this.userService = userService;
-        this.objectMapper = objectMapper;
+        this.paymentGateway = paymentGateway;
+        this.webhookProcessor = webhookProcessor;
     }
 
     @Transactional
@@ -47,39 +43,34 @@ public class PaymentService {
         String correlationId = UUID.randomUUID().toString();
         int amountInCents = planType.getPriceInCents();
 
-        // Save payment as PENDING
         Payment payment = new Payment(user, correlationId, amountInCents, planType);
         payment = paymentRepository.save(payment);
 
-        // Create charge on Woovi
-        WooviChargeRequest chargeRequest = new WooviChargeRequest(
-            correlationId,
-            amountInCents,
-            "Bonsaai - " + planType.getDescription()
+        ChargeRequest chargeRequest = new ChargeRequest(
+                correlationId,
+                amountInCents,
+                "Bonsaai - " + planType.getDescription()
         );
 
-        WooviChargeResponse response = wooviClient.createCharge(chargeRequest);
+        ChargeResponse response = paymentGateway.createCharge(chargeRequest);
 
-        // Save raw response for auditing
-        try {
-            payment.setRawResponse(objectMapper.writeValueAsString(response));
+        if (response.rawResponse() != null) {
+            payment.setRawResponse(response.rawResponse());
             paymentRepository.save(payment);
-        } catch (JsonProcessingException e) {
-            logger.warn("Failed to serialize Woovi response for payment {}", payment.getId(), e);
         }
 
         return new CheckoutResponse(
             payment.getId(),
-            response.charge().qrCodeImage(),
-            response.charge().brCode(),
+            response.qrCodeImage(),
+            response.brCode(),
             amountInCents,
             planType.getDescription()
         );
     }
 
-    public PaymentStatusResponse getPaymentStatus(UUID paymentId) {
-        Payment payment = paymentRepository.findById(paymentId)
-            .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+    public PaymentStatusResponse getPaymentStatus(UUID paymentId, UUID userId) {
+        Payment payment = paymentRepository.findByIdAndUserId(paymentId, userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Payment", paymentId));
 
         return new PaymentStatusResponse(
             payment.getId(),
@@ -89,25 +80,12 @@ public class PaymentService {
     }
 
     @Transactional
-    public void processWebhook(String correlationId) {
-        logger.info("Processing webhook for correlationID: {}", correlationId);
-
-        Payment payment = paymentRepository.findByCorrelationId(correlationId)
-            .orElseThrow(() -> new IllegalArgumentException("Payment not found for correlationID: " + correlationId));
-
-        // Idempotency check
-        if (payment.getStatus() == PaymentStatus.COMPLETED) {
-            logger.info("Payment {} already completed, ignoring webhook", payment.getId());
-            return;
-        }
-
-        // Update payment status
-        payment.setStatus(PaymentStatus.COMPLETED);
-        paymentRepository.save(payment);
-
-        // Upgrade user to PRO
-        userService.upgradeToPro(payment.getUser(), payment.getPlanType().getDurationInDays());
-
-        logger.info("Payment {} completed successfully for user {}", payment.getId(), payment.getUser().getId());
+    public WebhookResult processWebhook(
+            String correlationId,
+            int receivedValue,
+            String chargeStatus,
+            String eventId,
+            String eventType) {
+        return webhookProcessor.process(correlationId, receivedValue, chargeStatus, eventId, eventType);
     }
 }

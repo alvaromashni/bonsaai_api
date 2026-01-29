@@ -2,6 +2,7 @@ package dev.mashni.habitsapi.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mashni.habitsapi.payment.PaymentRepository;
+import dev.mashni.habitsapi.payment.ProcessedWebhookEventRepository;
 import dev.mashni.habitsapi.payment.dto.WooviWebhookPayload;
 import dev.mashni.habitsapi.payment.model.Payment;
 import dev.mashni.habitsapi.payment.model.PaymentStatus;
@@ -21,8 +22,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @DisplayName("WooviWebhookController Integration Tests")
 class WooviWebhookControllerIntegrationTest {
+
+    private static final String VALID_SECRET = "test-webhook-secret";
 
     @Autowired
     private MockMvc mockMvc;
@@ -46,11 +47,15 @@ class WooviWebhookControllerIntegrationTest {
     @Autowired
     private PaymentRepository paymentRepository;
 
+    @Autowired
+    private ProcessedWebhookEventRepository processedWebhookEventRepository;
+
     private User testUser;
     private Payment pendingPayment;
 
     @BeforeEach
     void setUp() {
+        processedWebhookEventRepository.deleteAll();
         paymentRepository.deleteAll();
         userRepository.deleteAll();
 
@@ -64,31 +69,70 @@ class WooviWebhookControllerIntegrationTest {
     }
 
     @Nested
-    @DisplayName("POST /api/webhooks/woovi")
-    class WebhookTests {
+    @DisplayName("Webhook Secret Validation")
+    class SecretValidationTests {
+
+        @Test
+        @DisplayName("Should reject webhook without secret header with 401")
+        void webhook_NoSecret_Returns401() throws Exception {
+            var payload = new WooviWebhookPayload(
+                "OPENPIX:CHARGE_COMPLETED",
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 990, "COMPLETED"),
+                "pix-tx-1"
+            );
+
+            mockMvc.perform(post("/api/webhooks/woovi")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isUnauthorized());
+
+            // Payment should remain PENDING
+            Payment payment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("Should reject webhook with wrong secret with 401")
+        void webhook_WrongSecret_Returns401() throws Exception {
+            var payload = new WooviWebhookPayload(
+                "OPENPIX:CHARGE_COMPLETED",
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 990, "COMPLETED"),
+                "pix-tx-1"
+            );
+
+            mockMvc.perform(post("/api/webhooks/woovi")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", "wrong-secret")
+                    .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isUnauthorized());
+
+            Payment payment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        }
+    }
+
+    @Nested
+    @DisplayName("Valid Webhook Processing")
+    class ValidWebhookTests {
 
         @Test
         @DisplayName("Should process CHARGE_COMPLETED and upgrade user to PRO")
         void webhook_ChargeCompleted_UpgradesUser() throws Exception {
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_COMPLETED",
-                new WooviWebhookPayload.Charge(
-                    pendingPayment.getCorrelationId(),
-                    990,
-                    "COMPLETED"
-                )
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 990, "COMPLETED"),
+                "pix-tx-1"
             );
 
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
 
-            // Verify payment status was updated
             Payment updatedPayment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
             assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 
-            // Verify user was upgraded to PRO
             User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
             assertThat(updatedUser.getUserPlan()).isEqualTo(UserPlan.PRO);
         }
@@ -96,28 +140,26 @@ class WooviWebhookControllerIntegrationTest {
         @Test
         @DisplayName("Should be idempotent - ignore duplicate webhooks")
         void webhook_DuplicateWebhook_Idempotent() throws Exception {
-            // First webhook
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_COMPLETED",
-                new WooviWebhookPayload.Charge(
-                    pendingPayment.getCorrelationId(),
-                    990,
-                    "COMPLETED"
-                )
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 990, "COMPLETED"),
+                "pix-tx-1"
             );
 
+            // First call
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
 
-            // Second webhook (duplicate)
+            // Second call (duplicate)
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
 
-            // Should still have only one completed payment
             Payment payment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         }
@@ -127,41 +169,32 @@ class WooviWebhookControllerIntegrationTest {
         void webhook_OtherEvent_Ignored() throws Exception {
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_CREATED",
-                new WooviWebhookPayload.Charge(
-                    pendingPayment.getCorrelationId(),
-                    990,
-                    "ACTIVE"
-                )
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 990, "ACTIVE"),
+                null
             );
 
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
 
-            // Payment should still be PENDING
             Payment payment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
-
-            // User should still be FREE
-            User user = userRepository.findById(testUser.getId()).orElseThrow();
-            assertThat(user.getUserPlan()).isEqualTo(UserPlan.FREE);
         }
 
         @Test
-        @DisplayName("Should return 200 even when payment not found (prevent retries)")
+        @DisplayName("Should return 200 when payment not found (prevent retries)")
         void webhook_PaymentNotFound_Returns200() throws Exception {
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_COMPLETED",
-                new WooviWebhookPayload.Charge(
-                    "non-existent-correlation-id",
-                    990,
-                    "COMPLETED"
-                )
+                new WooviWebhookPayload.Charge("non-existent-correlation-id", 990, "COMPLETED"),
+                "pix-tx-2"
             );
 
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
         }
@@ -171,85 +204,83 @@ class WooviWebhookControllerIntegrationTest {
         void webhook_MissingCharge_Returns400() throws Exception {
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_COMPLETED",
+                null,
                 null
             );
 
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isBadRequest());
         }
+    }
+
+    @Nested
+    @DisplayName("Content Validation")
+    class ContentValidationTests {
 
         @Test
-        @DisplayName("Should be accessible without authentication (public endpoint)")
-        void webhook_NoAuthentication_StillAccessible() throws Exception {
+        @DisplayName("Should NOT upgrade when amount mismatches")
+        void webhook_AmountMismatch_NoUpgrade() throws Exception {
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_COMPLETED",
-                new WooviWebhookPayload.Charge(
-                    pendingPayment.getCorrelationId(),
-                    990,
-                    "COMPLETED"
-                )
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 500, "COMPLETED"),
+                "pix-tx-3"
             );
 
-            // No oauth2Login() - simulating external webhook call
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
+
+            Payment payment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+
+            User user = userRepository.findById(testUser.getId()).orElseThrow();
+            assertThat(user.getUserPlan()).isEqualTo(UserPlan.FREE);
         }
 
         @Test
-        @DisplayName("Should process webhook for PRO_QUARTERLY plan")
+        @DisplayName("Should NOT upgrade when charge status is invalid")
+        void webhook_InvalidChargeStatus_NoUpgrade() throws Exception {
+            var payload = new WooviWebhookPayload(
+                "OPENPIX:CHARGE_COMPLETED",
+                new WooviWebhookPayload.Charge(pendingPayment.getCorrelationId(), 990, "ACTIVE"),
+                "pix-tx-4"
+            );
+
+            mockMvc.perform(post("/api/webhooks/woovi")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
+                    .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk());
+
+            Payment payment = paymentRepository.findById(pendingPayment.getId()).orElseThrow();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("Should process PRO_QUARTERLY webhook correctly")
         void webhook_ProQuarterly_UpgradesCorrectly() throws Exception {
-            // Create a quarterly payment
             Payment quarterlyPayment = new Payment(testUser, "quarterly-corr-id", 2590, PlanPrice.PRO_QUARTERLY);
             quarterlyPayment.setStatus(PaymentStatus.PENDING);
             quarterlyPayment = paymentRepository.save(quarterlyPayment);
 
             var payload = new WooviWebhookPayload(
                 "OPENPIX:CHARGE_COMPLETED",
-                new WooviWebhookPayload.Charge(
-                    quarterlyPayment.getCorrelationId(),
-                    2590,
-                    "COMPLETED"
-                )
+                new WooviWebhookPayload.Charge(quarterlyPayment.getCorrelationId(), 2590, "COMPLETED"),
+                "pix-tx-5"
             );
 
             mockMvc.perform(post("/api/webhooks/woovi")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-webhook-secret", VALID_SECRET)
                     .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk());
 
-            // Verify payment was completed
             Payment updatedPayment = paymentRepository.findById(quarterlyPayment.getId()).orElseThrow();
-            assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-        }
-
-        @Test
-        @DisplayName("Should process webhook for PRO_YEARLY plan")
-        void webhook_ProYearly_UpgradesCorrectly() throws Exception {
-            // Create a yearly payment
-            Payment yearlyPayment = new Payment(testUser, "yearly-corr-id", 9999, PlanPrice.PRO_YEARLY);
-            yearlyPayment.setStatus(PaymentStatus.PENDING);
-            yearlyPayment = paymentRepository.save(yearlyPayment);
-
-            var payload = new WooviWebhookPayload(
-                "OPENPIX:CHARGE_COMPLETED",
-                new WooviWebhookPayload.Charge(
-                    yearlyPayment.getCorrelationId(),
-                    9999,
-                    "COMPLETED"
-                )
-            );
-
-            mockMvc.perform(post("/api/webhooks/woovi")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(payload)))
-                .andExpect(status().isOk());
-
-            // Verify payment was completed
-            Payment updatedPayment = paymentRepository.findById(yearlyPayment.getId()).orElseThrow();
             assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         }
     }

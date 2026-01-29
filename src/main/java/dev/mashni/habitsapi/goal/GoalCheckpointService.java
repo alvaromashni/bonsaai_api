@@ -2,6 +2,7 @@ package dev.mashni.habitsapi.goal;
 
 import dev.mashni.habitsapi.goal.dto.CheckpointResponse;
 import dev.mashni.habitsapi.goal.dto.CreateCheckpointRequest;
+import dev.mashni.habitsapi.shared.exception.ResourceNotFoundException;
 import dev.mashni.habitsapi.user.User;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -51,14 +52,14 @@ public class GoalCheckpointService {
         Goal goal = findGoalAndValidateOwnership(goalId, currentUser);
 
         GoalCheckpoint checkpoint = checkpointRepository.findByIdAndGoal(checkpointId, goal)
-                .orElseThrow(() -> new IllegalArgumentException("Checkpoint not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Checkpoint", checkpointId));
 
         checkpointRepository.delete(checkpoint);
     }
 
     private Goal findGoalAndValidateOwnership(UUID goalId, User currentUser) {
         Goal goal = goalRepository.findById(goalId)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", goalId));
 
         if (!goal.getUser().getId().equals(currentUser.getId())) {
             throw new AccessDeniedException("You don't have permission to access this goal");

@@ -128,26 +128,52 @@ public class AnalyticsService {
                 continue;
             }
 
-            if (habit.getFrequencyType() == FrequencyType.DAILY) {
-                // For daily habits, count all days from start to today
-                long days = ChronoUnit.DAYS.between(startDate, today) + 1;
-                total += days;
-            } else if (habit.getFrequencyType() == FrequencyType.SPECIFIC_DAYS) {
-                // For specific days, count only the target days
-                Set<DayOfWeek> targetDays = habit.getTargetDays();
-                if (targetDays != null && !targetDays.isEmpty()) {
-                    LocalDate current = startDate;
-                    while (!current.isAfter(today)) {
-                        if (targetDays.contains(current.getDayOfWeek())) {
-                            total++;
-                        }
-                        current = current.plusDays(1);
-                    }
-                }
-            }
+            total += countExpectedDaysForHabit(habit, startDate, today);
         }
 
         return total;
+    }
+
+    /**
+     * Count expected days for a habit between startDate and endDate.
+     * Aligns with HabitService.isRequiredDay() semantics:
+     * - DAILY: All days are required
+     * - SPECIFIC_DAYS with targetDays: Only those days are required
+     * - SPECIFIC_DAYS with empty targetDays: Treat as DAILY (all days required)
+     */
+    private long countExpectedDaysForHabit(Habit habit, LocalDate startDate, LocalDate endDate) {
+        if (startDate.isAfter(endDate)) {
+            return 0;
+        }
+
+        // For DAILY habits, count all days
+        if (habit.getFrequencyType() == FrequencyType.DAILY) {
+            return ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        }
+
+        // For SPECIFIC_DAYS habits
+        if (habit.getFrequencyType() == FrequencyType.SPECIFIC_DAYS) {
+            Set<DayOfWeek> targetDays = habit.getTargetDays();
+
+            // If targetDays is null or empty, treat as DAILY (consistent with HabitService)
+            if (targetDays == null || targetDays.isEmpty()) {
+                return ChronoUnit.DAYS.between(startDate, endDate) + 1;
+            }
+
+            // Count only the target days in the range
+            long count = 0;
+            LocalDate current = startDate;
+            while (!current.isAfter(endDate)) {
+                if (targetDays.contains(current.getDayOfWeek())) {
+                    count++;
+                }
+                current = current.plusDays(1);
+            }
+            return count;
+        }
+
+        // Default fallback: treat as DAILY
+        return ChronoUnit.DAYS.between(startDate, endDate) + 1;
     }
 
     private String calculateBestDayOfWeek(List<HabitLog> logs) {
@@ -306,24 +332,7 @@ public class AnalyticsService {
             }
 
             LocalDate periodStart = habitStart.isBefore(startDate) ? startDate : habitStart;
-
-            if (habit.getFrequencyType() == FrequencyType.DAILY) {
-                long days = ChronoUnit.DAYS.between(periodStart, endDate) + 1;
-                if (days > 0) {
-                    total += days;
-                }
-            } else if (habit.getFrequencyType() == FrequencyType.SPECIFIC_DAYS) {
-                Set<DayOfWeek> targetDays = habit.getTargetDays();
-                if (targetDays != null && !targetDays.isEmpty()) {
-                    LocalDate current = periodStart;
-                    while (!current.isAfter(endDate)) {
-                        if (targetDays.contains(current.getDayOfWeek())) {
-                            total++;
-                        }
-                        current = current.plusDays(1);
-                    }
-                }
-            }
+            total += countExpectedDaysForHabit(habit, periodStart, endDate);
         }
 
         return total;

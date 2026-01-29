@@ -14,6 +14,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     Optional<Payment> findByCorrelationId(String correlationId);
 
+    Optional<Payment> findByIdAndUserId(UUID id, UUID userId);
+
     List<Payment> findByUserIdAndStatus(UUID userId, PaymentStatus status);
 
     List<Payment> findByUserIdOrderByCreatedAtDesc(UUID userId);

@@ -5,6 +5,7 @@ import dev.mashni.habitsapi.habit.model.FrequencyType;
 import dev.mashni.habitsapi.habit.model.Habit;
 import dev.mashni.habitsapi.habit.model.HabitLog;
 import dev.mashni.habitsapi.habit.model.HabitStatus;
+import dev.mashni.habitsapi.shared.exception.ResourceNotFoundException;
 import dev.mashni.habitsapi.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -51,7 +52,7 @@ public class HabitService {
     @Transactional
     public HabitLog checkHabit(UUID habitId, CheckHabitRequest request, User user) {
         var habit = habitRepository.findByIdAndUser(habitId, user)
-            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+            .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
 
         var date = request.date() != null ? request.date() : LocalDate.now();
 
@@ -92,13 +93,8 @@ public class HabitService {
 
     @Transactional(readOnly = true)
     public HabitDetailResponse getHabitDetail(UUID habitId, User user) {
-        var habitOpt = habitRepository.findByIdAndUserWithLogs(habitId, user);
-
-        if (habitOpt.isEmpty()) {
-            throw new IllegalArgumentException("Habit not found or does not belong to user");
-        }
-
-        var habit = habitOpt.get();
+        var habit = habitRepository.findByIdAndUserWithLogs(habitId, user)
+            .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
         var logs = habitLogRepository.findByHabitIdOrderByCompletedDateDesc(habitId);
         var completedDates = logs.stream()
             .map(HabitLog::getCompletedDate)
@@ -140,7 +136,7 @@ public class HabitService {
     @Transactional
     public Habit updateHabit(UUID habitId, UpdateHabitRequest request, User user) {
         var habit = habitRepository.findByIdAndUser(habitId, user)
-            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+            .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
 
         habit.setName(request.name());
         habit.setDescription(request.description());
@@ -155,14 +151,14 @@ public class HabitService {
     @Transactional
     public void deleteHabit(UUID habitId, User user) {
         var habit = habitRepository.findByIdAndUser(habitId, user)
-            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+            .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
         habitRepository.delete(habit);
     }
 
     @Transactional
     public Habit archiveHabit(UUID habitId, User user) {
         var habit = habitRepository.findByIdAndUser(habitId, user)
-            .orElseThrow(() -> new IllegalArgumentException("Habit not found or does not belong to user"));
+            .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
         habit.setStatus(HabitStatus.ARCHIVED);
         return habitRepository.save(habit);
     }

@@ -1,6 +1,5 @@
 package dev.mashni.habitsapi.analytics;
 
-import dev.mashni.habitsapi.user.UserPlan;
 import dev.mashni.habitsapi.user.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,8 +24,8 @@ public class AnalyticsController {
     public ResponseEntity<?> getAnalytics(Authentication authentication) {
         var user = userService.getUserFromAuthentication(authentication);
 
-        // Verify user has PRO plan
-        if (user.getUserPlan() != UserPlan.PRO) {
+        // Verify user has active PRO plan (considers expiration)
+        if (!user.isPro()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body("Analytics feature is only available for PRO users");
         }

@@ -38,7 +38,8 @@ public class UserController {
                 user.getName(),
                 user.getEmail(),
                 user.getAvatarUrl(),
-                user.getUserPlan()
+                user.getUserPlan(),
+                user.getPlanExpiresAt()
             );
             return ResponseEntity.ok(response);
         } catch (IllegalStateException e) {

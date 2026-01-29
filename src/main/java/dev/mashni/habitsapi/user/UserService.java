@@ -7,6 +7,8 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 public class UserService {
 
@@ -42,8 +44,25 @@ public class UserService {
     @Transactional
     public void upgradeToPro(User user, int durationInDays) {
         logger.info("Upgrading user {} to PRO for {} days", user.getId(), durationInDays);
+
+        LocalDateTime newExpirationDate;
+
+        // Scenario A: User is FREE or PRO expired - start from now
+        if (!user.isPro()) {
+            newExpirationDate = LocalDateTime.now().plusDays(durationInDays);
+            logger.info("User {} is FREE or expired. New expiration: {}", user.getId(), newExpirationDate);
+        }
+        // Scenario B: User is already PRO and active - stack duration
+        else {
+            newExpirationDate = user.getPlanExpiresAt().plusDays(durationInDays);
+            logger.info("User {} is active PRO. Stacking {} days. New expiration: {}",
+                       user.getId(), durationInDays, newExpirationDate);
+        }
+
         user.setUserPlan(UserPlan.PRO);
+        user.setPlanExpiresAt(newExpirationDate);
         userRepository.save(user);
-        logger.info("User {} upgraded to PRO successfully", user.getId());
+
+        logger.info("User {} upgraded to PRO successfully. Expires at: {}", user.getId(), newExpirationDate);
     }
 }

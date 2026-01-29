@@ -2,10 +2,10 @@ package dev.mashni.habitsapi.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mashni.habitsapi.payment.PaymentRepository;
-import dev.mashni.habitsapi.payment.client.WooviClient;
 import dev.mashni.habitsapi.payment.dto.CheckoutRequest;
-import dev.mashni.habitsapi.payment.dto.WooviChargeRequest;
-import dev.mashni.habitsapi.payment.dto.WooviChargeResponse;
+import dev.mashni.habitsapi.payment.gateway.ChargeRequest;
+import dev.mashni.habitsapi.payment.gateway.ChargeResponse;
+import dev.mashni.habitsapi.payment.gateway.PaymentGateway;
 import dev.mashni.habitsapi.payment.model.Payment;
 import dev.mashni.habitsapi.payment.model.PaymentStatus;
 import dev.mashni.habitsapi.payment.model.PlanPrice;
@@ -32,6 +32,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,7 +59,7 @@ class PaymentControllerIntegrationTest {
     private PaymentRepository paymentRepository;
 
     @MockBean
-    private WooviClient wooviClient;
+    private PaymentGateway paymentGateway;
 
     private User testUser;
 
@@ -70,19 +71,16 @@ class PaymentControllerIntegrationTest {
         testUser = new User("test@example.com", "Test User", "google-test-123");
         testUser = userRepository.save(testUser);
 
-        // Mock WooviClient to return a valid response
-        when(wooviClient.createCharge(any(WooviChargeRequest.class)))
+        // Mock PaymentGateway to return a valid response
+        when(paymentGateway.createCharge(any(ChargeRequest.class)))
             .thenAnswer(inv -> {
-                WooviChargeRequest req = inv.getArgument(0);
-                return new WooviChargeResponse(
-                    new WooviChargeResponse.Charge(
-                        req.correlationID(),
-                        req.value(),
-                        "ACTIVE",
-                        "00020126580014br.gov.bcb.pix...",
-                        "https://api.openpix.com.br/qrcode/" + req.correlationID(),
-                        "https://openpix.com.br/pay/" + req.correlationID()
-                    )
+                ChargeRequest req = inv.getArgument(0);
+                return new ChargeResponse(
+                    req.correlationId(),
+                    req.amountInCents(),
+                    "00020126580014br.gov.bcb.pix...",
+                    "https://api.openpix.com.br/qrcode/" + req.correlationId(),
+                    "{\"status\":\"ACTIVE\"}"
                 );
             });
     }
@@ -110,6 +108,7 @@ class PaymentControllerIntegrationTest {
 
             mockMvc.perform(post("/api/payments/checkout")
                     .with(oauth2Login().oauth2User(createOAuth2User(testUser)))
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -134,6 +133,7 @@ class PaymentControllerIntegrationTest {
 
             mockMvc.perform(post("/api/payments/checkout")
                     .with(oauth2Login().oauth2User(createOAuth2User(testUser)))
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -148,6 +148,7 @@ class PaymentControllerIntegrationTest {
 
             mockMvc.perform(post("/api/payments/checkout")
                     .with(oauth2Login().oauth2User(createOAuth2User(testUser)))
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -160,17 +161,19 @@ class PaymentControllerIntegrationTest {
         void checkout_MissingPlanType_Returns400() throws Exception {
             mockMvc.perform(post("/api/payments/checkout")
                     .with(oauth2Login().oauth2User(createOAuth2User(testUser)))
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}"))
                 .andExpect(status().isBadRequest());
         }
 
         @Test
-        @DisplayName("Should return 302 redirect when not authenticated")
+        @DisplayName("Should return 302 redirect when not authenticated (with CSRF)")
         void checkout_NotAuthenticated_ReturnsRedirect() throws Exception {
             var request = new CheckoutRequest(PlanPrice.PRO_MONTHLY);
 
             mockMvc.perform(post("/api/payments/checkout")
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isFound()); // 302 redirect to login
@@ -216,6 +219,60 @@ class PaymentControllerIntegrationTest {
             UUID randomId = UUID.randomUUID();
 
             mockMvc.perform(get("/api/payments/{paymentId}/status", randomId)
+                    .with(oauth2Login().oauth2User(createOAuth2User(testUser))))
+                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("Should return 404 when user tries to access another user's payment (IDOR protection)")
+        void getStatus_AnotherUsersPayment_Returns404() throws Exception {
+            // Create another user
+            User otherUser = new User("other@example.com", "Other User", "google-other-456");
+            otherUser = userRepository.save(otherUser);
+
+            // Create a payment for the other user
+            Payment otherUserPayment = new Payment(otherUser, UUID.randomUUID().toString(), 990, PlanPrice.PRO_MONTHLY);
+            otherUserPayment = paymentRepository.save(otherUserPayment);
+
+            // Try to access the other user's payment as testUser - should return 404
+            mockMvc.perform(get("/api/payments/{paymentId}/status", otherUserPayment.getId())
+                    .with(oauth2Login().oauth2User(createOAuth2User(testUser))))
+                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("Should allow user to access their own payment")
+        void getStatus_OwnPayment_ReturnsStatus() throws Exception {
+            // Create a payment for testUser
+            Payment ownPayment = new Payment(testUser, UUID.randomUUID().toString(), 2590, PlanPrice.PRO_QUARTERLY);
+            ownPayment = paymentRepository.save(ownPayment);
+
+            // Access own payment - should succeed
+            mockMvc.perform(get("/api/payments/{paymentId}/status", ownPayment.getId())
+                    .with(oauth2Login().oauth2User(createOAuth2User(testUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentId").value(ownPayment.getId().toString()))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+        }
+
+        @Test
+        @DisplayName("Should return same 404 for non-existent and unauthorized payments (no information leakage)")
+        void getStatus_NoInformationLeakage_SameResponseForBothCases() throws Exception {
+            // Create another user with a payment
+            User otherUser = new User("leaktest@example.com", "Leak Test User", "google-leak-789");
+            otherUser = userRepository.save(otherUser);
+
+            Payment otherUserPayment = new Payment(otherUser, UUID.randomUUID().toString(), 990, PlanPrice.PRO_MONTHLY);
+            otherUserPayment = paymentRepository.save(otherUserPayment);
+
+            UUID nonExistentId = UUID.randomUUID();
+
+            // Both should return 404 - no way to distinguish between "not found" and "not yours"
+            mockMvc.perform(get("/api/payments/{paymentId}/status", nonExistentId)
+                    .with(oauth2Login().oauth2User(createOAuth2User(testUser))))
+                .andExpect(status().isNotFound());
+
+            mockMvc.perform(get("/api/payments/{paymentId}/status", otherUserPayment.getId())
                     .with(oauth2Login().oauth2User(createOAuth2User(testUser))))
                 .andExpect(status().isNotFound());
         }

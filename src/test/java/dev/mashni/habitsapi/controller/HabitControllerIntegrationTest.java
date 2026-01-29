@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -96,6 +97,7 @@ class HabitControllerIntegrationTest {
         // Act & Assert
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
@@ -123,6 +125,7 @@ class HabitControllerIntegrationTest {
 
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated());
@@ -157,6 +160,7 @@ class HabitControllerIntegrationTest {
 
         var result = mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
@@ -188,6 +192,7 @@ class HabitControllerIntegrationTest {
 
         var result = mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
@@ -201,6 +206,7 @@ class HabitControllerIntegrationTest {
         // Act 1: First check-in (mark as done)
         mockMvc.perform(post("/api/habits/" + habitId + "/check")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isOk());
@@ -215,6 +221,7 @@ class HabitControllerIntegrationTest {
         // Act 2: Second check-in (unmark/toggle off)
         mockMvc.perform(post("/api/habits/" + habitId + "/check")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isOk());
@@ -234,6 +241,7 @@ class HabitControllerIntegrationTest {
         var requestA = new CreateHabitRequest("Habit A", "Description A", LocalDate.now(), null, null);
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(requestA)))
             .andExpect(status().isCreated());
@@ -242,6 +250,7 @@ class HabitControllerIntegrationTest {
         var requestB = new CreateHabitRequest("Habit B", "Description B", LocalDate.now(), null, null);
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userB)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(requestB)))
             .andExpect(status().isCreated());
@@ -274,6 +283,7 @@ class HabitControllerIntegrationTest {
 
         mockMvc.perform(post("/api/habits")
                 .with(oauth2Login().oauth2User(createOAuth2User(userA)))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(invalidRequest)))
             .andExpect(status().isBadRequest());

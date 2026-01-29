@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
@@ -26,14 +28,20 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // Use CsrfTokenRequestAttributeHandler so the frontend can read the XSRF-TOKEN
+        // cookie and send it back as the X-XSRF-TOKEN header on mutating requests.
+        CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
+        requestHandler.setCsrfRequestAttributeName(null);
+
         http
-            // Enable CORS with configuration from CorsConfig
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
-            // Configure CSRF
+            // CSRF enabled for all session-based /api/** routes.
+            // Only webhooks are exempt (protected by webhook secret signature).
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/api/**")
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRequestHandler(requestHandler)
+                .ignoringRequestMatchers("/api/webhooks/**")
             )
-            // Configure authorization
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/", "/error", "/login**", "/oauth2/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
@@ -42,12 +50,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
             )
-            // Configure OAuth2 login
             .oauth2Login(oauth2 -> oauth2
                 .userInfoEndpoint(userInfo -> userInfo
                     .userService(customOAuth2UserService)
                 )
-                // Use custom success handler to redirect to frontend
                 .successHandler(authenticationSuccessHandler)
             );
 

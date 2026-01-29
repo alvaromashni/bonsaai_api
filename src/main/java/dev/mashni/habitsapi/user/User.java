@@ -41,6 +41,9 @@ public class User {
     @Column(name = "user_plan", nullable = false)
     private UserPlan userPlan = UserPlan.FREE;
 
+    @Column(name = "plan_expires_at")
+    private LocalDateTime planExpiresAt;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Habit> habits = new ArrayList<>();
 
@@ -121,5 +124,28 @@ public class User {
 
     public void setUserPlan(UserPlan userPlan) {
         this.userPlan = userPlan;
+    }
+
+    public LocalDateTime getPlanExpiresAt() {
+        return planExpiresAt;
+    }
+
+    public void setPlanExpiresAt(LocalDateTime planExpiresAt) {
+        this.planExpiresAt = planExpiresAt;
+    }
+
+    /**
+     * Checks if the user has an active PRO plan.
+     * A user is considered PRO if:
+     * 1. userPlan is set to PRO
+     * 2. planExpiresAt is not null
+     * 3. planExpiresAt is in the future
+     *
+     * @return true if the user has an active PRO subscription, false otherwise
+     */
+    public boolean isPro() {
+        return UserPlan.PRO.equals(this.userPlan) &&
+               this.planExpiresAt != null &&
+               this.planExpiresAt.isAfter(LocalDateTime.now());
     }
 }

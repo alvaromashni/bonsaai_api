@@ -9,6 +9,7 @@ import dev.mashni.habitsapi.goal.GoalStatus;
 import dev.mashni.habitsapi.habit.model.Habit;
 import dev.mashni.habitsapi.goal.GoalRepository;
 import dev.mashni.habitsapi.habit.HabitRepository;
+import dev.mashni.habitsapi.shared.exception.ResourceNotFoundException;
 import dev.mashni.habitsapi.user.User;
 import dev.mashni.habitsapi.user.UserPlan;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,10 +55,11 @@ class GoalServiceTest {
         freeUser.setId(UUID.randomUUID());
         freeUser.setUserPlan(UserPlan.FREE);
 
-        // Pro user setup
+        // Pro user setup (with valid PRO plan expiration)
         proUser = new User("pro@example.com", "Pro User", "google-pro-456");
         proUser.setId(UUID.randomUUID());
         proUser.setUserPlan(UserPlan.PRO);
+        proUser.setPlanExpiresAt(LocalDateTime.now().plusDays(30)); // Active PRO
 
         // Test habits
         testHabit1 = new Habit("Exercise", "Daily exercise", LocalDate.now(), freeUser);
@@ -171,7 +173,7 @@ class GoalServiceTest {
     }
 
     @Test
-    @DisplayName("Create goal with non-existent habit ID - throws exception")
+    @DisplayName("Create goal with non-existent habit ID - throws ResourceNotFoundException")
     void testCreateGoal_WithInvalidHabitId_ThrowsException() {
         // Arrange
         UUID invalidHabitId = UUID.randomUUID();
@@ -189,14 +191,14 @@ class GoalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> goalService.createGoal(request, freeUser))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not found or does not belong to user");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Habit not found");
 
         verify(goalRepository, never()).save(any(Goal.class));
     }
 
     @Test
-    @DisplayName("Create goal with habit from different user - throws exception")
+    @DisplayName("Create goal with habit from different user - throws ResourceNotFoundException")
     void testCreateGoal_WithHabitFromDifferentUser_ThrowsException() {
         // Arrange
         User otherUser = new User("other@example.com", "Other User", "google-other-789");
@@ -219,8 +221,8 @@ class GoalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> goalService.createGoal(request, freeUser))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not found or does not belong to user");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Habit not found");
     }
 
     @Test
@@ -267,7 +269,7 @@ class GoalServiceTest {
     }
 
     @Test
-    @DisplayName("Get goal detail with invalid ID - throws exception")
+    @DisplayName("Get goal detail with invalid ID - throws ResourceNotFoundException")
     void testGetGoalDetail_NotFound_ThrowsException() {
         // Arrange
         UUID invalidId = UUID.randomUUID();
@@ -276,7 +278,7 @@ class GoalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> goalService.getGoalDetail(invalidId, freeUser))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Goal not found");
     }
 
@@ -340,7 +342,7 @@ class GoalServiceTest {
     }
 
     @Test
-    @DisplayName("Delete goal belonging to different user - throws exception")
+    @DisplayName("Delete goal belonging to different user - throws ResourceNotFoundException")
     void testDeleteGoal_DifferentUser_ThrowsException() {
         // Arrange
         when(goalRepository.findByIdAndUser(testGoal.getId(), proUser))
@@ -348,8 +350,8 @@ class GoalServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> goalService.deleteGoal(testGoal.getId(), proUser))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Goal not found or does not belong to user");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Goal not found");
 
         verify(goalRepository, never()).delete(any(Goal.class));
     }

@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
@@ -60,9 +61,10 @@ class AnalyticsControllerIntegrationTest {
         freeUser.setUserPlan(UserPlan.FREE);
         freeUser = userRepository.save(freeUser);
 
-        // Create PRO user
+        // Create PRO user with valid expiration
         proUser = new User("pro@test.com", "Pro User", "google-pro");
         proUser.setUserPlan(UserPlan.PRO);
+        proUser.setPlanExpiresAt(LocalDateTime.now().plusDays(30));
         proUser = userRepository.save(proUser);
     }
 
@@ -78,6 +80,20 @@ class AnalyticsControllerIntegrationTest {
     void testFreeUserAccess_ReturnsForbidden() throws Exception {
         mockMvc.perform(get("/api/analytics")
                 .with(oauth2Login().oauth2User(createOAuth2User(freeUser))))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Security Test: Expired PRO user accessing analytics should return 403 Forbidden")
+    void testExpiredProUserAccess_ReturnsForbidden() throws Exception {
+        // Create PRO user with expired plan
+        User expiredProUser = new User("expired@test.com", "Expired Pro User", "google-expired");
+        expiredProUser.setUserPlan(UserPlan.PRO);
+        expiredProUser.setPlanExpiresAt(LocalDateTime.now().minusDays(1)); // Expired yesterday
+        expiredProUser = userRepository.save(expiredProUser);
+
+        mockMvc.perform(get("/api/analytics")
+                .with(oauth2Login().oauth2User(createOAuth2User(expiredProUser))))
             .andExpect(status().isForbidden());
     }
 

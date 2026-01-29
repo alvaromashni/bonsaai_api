@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -66,13 +67,19 @@ class GoalControllerIntegrationTest {
                     return userRepository.save(user);
                 });
 
-        // Setup PRO user
+        // Setup PRO user with valid expiration
         proUser = userRepository.findByGoogleId("test-pro-google-id")
                 .orElseGet(() -> {
                     User user = new User("prouser@example.com", "Pro User", "test-pro-google-id");
                     user.setUserPlan(UserPlan.PRO);
+                    user.setPlanExpiresAt(LocalDateTime.now().plusDays(30));
                     return userRepository.save(user);
                 });
+        // Ensure PRO user has valid expiration (update if already exists)
+        if (proUser.getPlanExpiresAt() == null || proUser.getPlanExpiresAt().isBefore(LocalDateTime.now())) {
+            proUser.setPlanExpiresAt(LocalDateTime.now().plusDays(30));
+            proUser = userRepository.save(proUser);
+        }
     }
 
     @Test
@@ -89,6 +96,7 @@ class GoalControllerIntegrationTest {
         // Act & Assert
         mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -104,6 +112,7 @@ class GoalControllerIntegrationTest {
         var firstRequest = new CreateGoalRequest("First Goal", "Description", null, null);
         mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(firstRequest)))
                 .andExpect(status().isCreated());
@@ -114,9 +123,10 @@ class GoalControllerIntegrationTest {
         // Act & Assert
         mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(secondRequest)))
-                .andExpect(status().isNotFound()); // GoalService throws IllegalArgumentException -> 404
+                .andExpect(status().isBadRequest()); // IllegalArgumentException -> 400 Bad Request
     }
 
     @Test
@@ -133,6 +143,7 @@ class GoalControllerIntegrationTest {
 
             mockMvc.perform(post("/api/goals")
                             .with(oauth2Login().oauth2User(createOAuth2User(proUser)))
+                            .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
@@ -163,6 +174,7 @@ class GoalControllerIntegrationTest {
 
         mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -176,6 +188,7 @@ class GoalControllerIntegrationTest {
         var freeUserRequest = new CreateGoalRequest("Free User Goal", "Description", null, null);
         mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(freeUserRequest)))
                 .andExpect(status().isCreated());
@@ -184,6 +197,7 @@ class GoalControllerIntegrationTest {
         var proUserRequest = new CreateGoalRequest("Pro User Goal", "Description", null, null);
         mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(proUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(proUserRequest)))
                 .andExpect(status().isCreated());
@@ -219,6 +233,7 @@ class GoalControllerIntegrationTest {
 
         MvcResult createResult = mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isCreated())
@@ -254,6 +269,7 @@ class GoalControllerIntegrationTest {
 
         MvcResult createResult = mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isCreated())
@@ -267,6 +283,7 @@ class GoalControllerIntegrationTest {
 
         mockMvc.perform(put("/api/goals/" + goalId + "/habits")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
@@ -280,6 +297,7 @@ class GoalControllerIntegrationTest {
         var request = new CreateGoalRequest("Goal to Complete", "Description", null, null);
         MvcResult createResult = mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -290,7 +308,8 @@ class GoalControllerIntegrationTest {
 
         // Complete goal
         mockMvc.perform(patch("/api/goals/" + goalId + "/complete")
-                        .with(oauth2Login().oauth2User(createOAuth2User(freeUser))))
+                        .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
@@ -302,6 +321,7 @@ class GoalControllerIntegrationTest {
         var request = new CreateGoalRequest("Goal to Delete", "Description", null, null);
         MvcResult createResult = mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -312,7 +332,8 @@ class GoalControllerIntegrationTest {
 
         // Delete goal
         mockMvc.perform(delete("/api/goals/" + goalId)
-                        .with(oauth2Login().oauth2User(createOAuth2User(freeUser))))
+                        .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf()))
                 .andExpect(status().isOk());
 
         // Verify goal is deleted
@@ -322,12 +343,44 @@ class GoalControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("Expired PRO user cannot create multiple goals - treated as FREE")
+    void testCreateGoal_ExpiredProUser_LimitedToOneGoal() throws Exception {
+        // Create expired PRO user
+        User expiredProUser = userRepository.findByGoogleId("test-expired-pro-google-id")
+                .orElseGet(() -> {
+                    User user = new User("expiredpro@example.com", "Expired Pro User", "test-expired-pro-google-id");
+                    user.setUserPlan(UserPlan.PRO);
+                    user.setPlanExpiresAt(LocalDateTime.now().minusDays(1)); // Expired yesterday
+                    return userRepository.save(user);
+                });
+
+        // First goal should succeed
+        var firstRequest = new CreateGoalRequest("First Goal", "Description", null, null);
+        mockMvc.perform(post("/api/goals")
+                        .with(oauth2Login().oauth2User(createOAuth2User(expiredProUser)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstRequest)))
+                .andExpect(status().isCreated());
+
+        // Second goal should fail (treated as FREE user)
+        var secondRequest = new CreateGoalRequest("Second Goal", "Should fail", null, null);
+        mockMvc.perform(post("/api/goals")
+                        .with(oauth2Login().oauth2User(createOAuth2User(expiredProUser)))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondRequest)))
+                .andExpect(status().isBadRequest()); // IllegalArgumentException -> 400 Bad Request
+    }
+
+    @Test
     @DisplayName("User cannot access another user's goal")
     void testDataIsolation_CannotAccessOtherUserGoal() throws Exception {
         // FREE user creates goal
         var request = new CreateGoalRequest("Private Goal", "Description", null, null);
         MvcResult createResult = mockMvc.perform(post("/api/goals")
                         .with(oauth2Login().oauth2User(createOAuth2User(freeUser)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -361,6 +414,7 @@ class GoalControllerIntegrationTest {
 
         MvcResult result = mockMvc.perform(post("/api/habits")
                         .with(oauth2Login().oauth2User(createOAuth2User(user)))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(habitRequest)))
                 .andExpect(status().isCreated())

@@ -1,5 +1,6 @@
 package dev.mashni.habitsapi.user;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record UserResponse(
@@ -7,6 +8,7 @@ public record UserResponse(
         String name,
         String email,
         String avatarUrl,
-        UserPlan userPlan
+        UserPlan userPlan,
+        LocalDateTime planExpiresAt
 ) {
 }

@@ -41,6 +41,7 @@ public class CorsConfig {
             "Authorization",
             "Content-Type",
             "X-Requested-With",
+            "X-XSRF-TOKEN",
             "Accept",
             "Origin",
             "Access-Control-Request-Method",

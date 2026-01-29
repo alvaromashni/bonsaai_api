@@ -58,8 +58,8 @@ public class RateLimitService {
 
     private BucketConfiguration createConfiguration(UserPlan userPlan) {
         int capacity = userPlan == UserPlan.PRO
-                ? properties.getProUserRequests()
-                : properties.getFreeUserRequests();
+                ? properties.getProUserRequestsPerHour()
+                : properties.getFreeUserRequestsPerHour();
 
         return BucketConfiguration.builder()
                 .addLimit(Bandwidth.builder()
@@ -70,7 +70,7 @@ public class RateLimitService {
     }
 
     private BucketConfiguration createUnauthenticatedConfiguration() {
-        int capacity = properties.getUnauthenticatedRequests();
+        int capacity = properties.getUnauthenticatedRequestsPerHour();
         return BucketConfiguration.builder()
                 .addLimit(Bandwidth.builder()
                         .capacity(capacity)

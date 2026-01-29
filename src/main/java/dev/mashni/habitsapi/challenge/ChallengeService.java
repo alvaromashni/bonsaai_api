@@ -7,8 +7,8 @@ import dev.mashni.habitsapi.habit.HabitRepository;
 import dev.mashni.habitsapi.habit.model.FrequencyType;
 import dev.mashni.habitsapi.habit.model.Habit;
 import dev.mashni.habitsapi.habit.model.HabitLog;
+import dev.mashni.habitsapi.shared.exception.ResourceNotFoundException;
 import dev.mashni.habitsapi.user.User;
-import dev.mashni.habitsapi.user.UserPlan;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +38,9 @@ public class ChallengeService {
     public ChallengeResponse createChallenge(CreateChallengeRequest request, User user) {
         // Only PRO users can create challenges
         validateProUser(user);
+
+        // Defense in depth: validate dates even though DTO validation should catch these
+        validateChallengeDates(request.startDate(), request.endDate());
 
         // Generate unique invite code
         String inviteCode = generateUniqueInviteCode();
@@ -72,7 +75,10 @@ public class ChallengeService {
     public ChallengeResponse joinChallenge(JoinChallengeRequest request, User user) {
         // Find challenge by invite code
         var challenge = challengeRepository.findByInviteCode(request.inviteCode().toUpperCase())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
+                .orElseThrow(() -> new ResourceNotFoundException("Challenge", "invite code " + request.inviteCode()));
+
+        // Check if challenge has ended - cannot join after end date
+        validateChallengeNotEnded(challenge);
 
         // Check if user is already a participant
         if (challengeRepository.isUserParticipant(challenge.getId(), user)) {
@@ -107,7 +113,7 @@ public class ChallengeService {
         }
 
         var challenge = challengeRepository.findByIdWithHabits(challengeId)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Challenge", challengeId));
 
         // Get leaderboard
         List<LeaderboardEntryResponse> leaderboard = getLeaderboard(challenge);
@@ -165,7 +171,7 @@ public class ChallengeService {
 
         // Get the challenge
         var challenge = challengeRepository.findById(challengeId)
-                .orElseThrow(() -> new IllegalArgumentException("Challenge not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Challenge", challengeId));
 
         // Get the user's habit for this challenge
         var habit = habitRepository.findByChallengeAndUser(challengeId, user.getId())
@@ -269,8 +275,39 @@ public class ChallengeService {
     }
 
     private void validateProUser(User user) {
-        if (user.getUserPlan() != UserPlan.PRO) {
+        if (!user.isPro()) {
             throw new IllegalArgumentException("Only PRO users can create challenges. Upgrade to PRO to unlock this feature.");
+        }
+    }
+
+    /**
+     * Validates challenge date constraints (defense in depth).
+     * - startDate must be today or in the future
+     * - endDate (if provided) must be on or after startDate
+     */
+    private void validateChallengeDates(LocalDate startDate, LocalDate endDate) {
+        LocalDate today = LocalDate.now();
+
+        if (startDate == null) {
+            throw new IllegalArgumentException("Start date is required");
+        }
+
+        if (startDate.isBefore(today)) {
+            throw new IllegalArgumentException("Start date must be today or in the future");
+        }
+
+        if (endDate != null && endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date must be on or after start date");
+        }
+    }
+
+    /**
+     * Validates that a challenge has not ended.
+     * Users cannot join a challenge after its end date.
+     */
+    private void validateChallengeNotEnded(Challenge challenge) {
+        if (challenge.getEndDate() != null && LocalDate.now().isAfter(challenge.getEndDate())) {
+            throw new IllegalArgumentException("Cannot join challenge: the challenge has already ended");
         }
     }
 

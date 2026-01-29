@@ -8,8 +8,8 @@ import dev.mashni.habitsapi.goal.dto.UpdateGoalHabitsRequest;
 import dev.mashni.habitsapi.habit.model.Habit;
 import dev.mashni.habitsapi.habit.dto.HabitSummaryResponse;
 import dev.mashni.habitsapi.habit.HabitRepository;
+import dev.mashni.habitsapi.shared.exception.ResourceNotFoundException;
 import dev.mashni.habitsapi.user.User;
-import dev.mashni.habitsapi.user.UserPlan;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +59,7 @@ public class GoalService {
     @Transactional(readOnly = true)
     public GoalDetailResponse getGoalDetail(UUID goalId, User user) {
         var goal = goalRepository.findByIdAndUserWithHabitsAndCheckpoints(goalId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found or does not belong to user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", goalId));
 
         var habitResponses = goal.getHabits().stream()
                 .map(this::mapHabitToSummary)
@@ -86,7 +86,7 @@ public class GoalService {
     @Transactional
     public Goal updateGoalHabits(UUID goalId, UpdateGoalHabitsRequest request, User user) {
         var goal = goalRepository.findByIdAndUserWithHabits(goalId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found or does not belong to user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", goalId));
 
         // Validate and get new habits
         Set<Habit> newHabits = validateAndGetHabits(request.habitIds(), user);
@@ -101,7 +101,7 @@ public class GoalService {
     @Transactional
     public Goal completeGoal(UUID goalId, User user) {
         var goal = goalRepository.findByIdAndUser(goalId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found or does not belong to user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", goalId));
 
         goal.setStatus(GoalStatus.COMPLETED);
         return goalRepository.save(goal);
@@ -110,23 +110,24 @@ public class GoalService {
     @Transactional
     public void deleteGoal(UUID goalId, User user) {
         var goal = goalRepository.findByIdAndUser(goalId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found or does not belong to user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Goal", goalId));
 
         goalRepository.delete(goal);
     }
 
     /**
-     * Validate that FREE users don't exceed the 1 goal limit.
-     * PRO users have unlimited goals.
+     * Validate that non-PRO users don't exceed the 1 goal limit.
+     * Active PRO users have unlimited goals.
+     * Uses isPro() to check for active PRO plan (considers expiration).
      */
     private void validateGoalLimit(User user) {
-        if (user.getUserPlan() == UserPlan.FREE) {
+        if (!user.isPro()) {
             long goalCount = goalRepository.countByUser(user);
             if (goalCount >= 1) {
                 throw new IllegalArgumentException("Free users can only create 1 goal. Upgrade to PRO for unlimited goals.");
             }
         }
-        // PRO users have no limit
+        // Active PRO users have no limit
     }
 
     /**
@@ -137,9 +138,7 @@ public class GoalService {
 
         for (UUID habitId : habitIds) {
             var habit = habitRepository.findByIdAndUser(habitId, user)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Habit with ID " + habitId + " not found or does not belong to user"
-                    ));
+                    .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
             habits.add(habit);
         }
 

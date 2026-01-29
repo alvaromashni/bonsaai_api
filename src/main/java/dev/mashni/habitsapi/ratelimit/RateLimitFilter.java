@@ -80,8 +80,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (isAuthenticated(auth)) {
             try {
                 User user = userService.getUserFromAuthentication(auth);
-                UserPlan plan = user.getUserPlan() != null ? user.getUserPlan() : UserPlan.FREE;
-                return rateLimitService.resolveBucket(key, plan);
+                // Use isPro() to check for active PRO plan (considers expiration)
+                UserPlan effectivePlan = user.isPro() ? UserPlan.PRO : UserPlan.FREE;
+                return rateLimitService.resolveBucket(key, effectivePlan);
             } catch (Exception e) {
                 // Fallback to unauthenticated bucket
             }

@@ -1,170 +1,170 @@
 # Bonsaai API
 
-REST API for a habit and goal tracking application with social challenges and subscription-based monetization. Built with Java and Spring Boot, designed for production deployment.
+API REST para uma aplicacao de rastreamento de habitos e metas com desafios sociais e monetizacao por assinatura. Desenvolvida em Java com Spring Boot e projetada para deploy em producao.
 
-## Overview
+## Visao Geral
 
-Bonsaai is a backend system that allows users to build habits, set goals, and compete with others through challenges. It features a freemium model with Google OAuth2 authentication, PIX payment integration, distributed rate limiting, and comprehensive analytics.
+Bonsaai e um sistema backend que permite aos usuarios criar habitos, definir metas e competir com outros usuarios atraves de desafios. O sistema adota um modelo freemium com autenticacao via Google OAuth2, integracao com pagamentos PIX, rate limiting distribuido e analytics de habitos.
 
-## Tech Stack
+## Stack Tecnologica
 
-| Layer | Technology |
+| Camada | Tecnologia |
 |---|---|
-| Language | Java 21 |
+| Linguagem | Java 21 |
 | Framework | Spring Boot 3.5 |
-| Database | PostgreSQL |
-| Migrations | Flyway |
-| Authentication | OAuth2 (Google) |
+| Banco de Dados | PostgreSQL |
+| Migracoes | Flyway |
+| Autenticacao | OAuth2 (Google) |
 | Cache / Rate Limiting | Redis + Bucket4j |
-| Payments | Woovi (OpenPix / PIX) |
-| Documentation | Springdoc OpenAPI (Swagger) |
+| Pagamentos | Woovi (OpenPix / PIX) |
+| Documentacao | Springdoc OpenAPI (Swagger) |
 | Build | Maven |
-| Deployment | Docker / Render |
+| Deploy | Docker / Render |
 
-## Features
+## Funcionalidades
 
-### Habit Management
-- Create habits with daily or weekly frequency and custom target days
-- Log completions (check-in) per habit
-- Archive habits without losing historical data (soft delete)
+### Gerenciamento de Habitos
+- Criacao de habitos com frequencia diaria ou semanal e dias-alvo personalizados
+- Registro de conclusoes (check-in) por habito
+- Arquivamento de habitos sem perda de historico (soft delete)
 
-### Goal Tracking
-- Create goals with deadlines and link multiple habits to them
-- Track progress through goal checkpoints
-- Mark goals as complete
-- FREE tier: 1 active goal; PRO tier: unlimited goals
+### Acompanhamento de Metas
+- Criacao de metas com prazos e vinculacao de multiplos habitos
+- Acompanhamento de progresso por checkpoints
+- Marcacao de metas como concluidas
+- Plano FREE: 1 meta ativa; Plano PRO: metas ilimitadas
 
-### Social Challenges
-- Create and join challenges using invite codes
-- Check in habits within the challenge context
-- Leaderboard with rankings per challenge
-- Challenge creation is restricted to PRO users
+### Desafios Sociais
+- Criacao e participacao em desafios por codigo de convite
+- Check-in de habitos no contexto do desafio
+- Placar com ranking por desafio
+- Criacao de desafios restrita a usuarios PRO
 
-### Subscription and Payments
-- Three subscription plans: Monthly (R$ 9.90), Quarterly (R$ 25.90), Yearly (R$ 99.90)
-- PIX payment processing via Woovi/OpenPix gateway
-- Idempotent webhook processing to prevent duplicate confirmations
-- Automatic plan expiration tracking
+### Assinatura e Pagamentos
+- Tres planos de assinatura: Mensal (R$ 9,90), Trimestral (R$ 25,90), Anual (R$ 99,90)
+- Processamento de pagamentos via PIX pela gateway Woovi/OpenPix
+- Processamento idempotente de webhooks para evitar ativacoes duplicadas
+- Controle automatico de expiracao de plano
 
 ### Rate Limiting
-- Token bucket algorithm via Bucket4j with Redis backend
-- Tiered limits: unauthenticated (50 req/h), FREE (100 req/h), PRO (1000 req/h)
+- Algoritmo token bucket via Bucket4j com backend em Redis
+- Limites por camada: nao autenticado (50 req/h), FREE (100 req/h), PRO (1000 req/h)
 
 ### Analytics
-- Habit performance insights and completion statistics
-- Restricted to PRO users
+- Insights de desempenho e estatisticas de conclusao de habitos
+- Restrito a usuarios PRO
 
-## Project Structure
+## Estrutura do Projeto
 
 ```
 src/main/java/dev/mashni/habitsapi/
-├── auth/             # Security config, OAuth2 user service, login handler
-├── habit/            # Habit CRUD, check-in, archiving, logs
-├── goal/             # Goals, linked habits, checkpoints
-├── challenge/        # Challenge creation, join, check-in, leaderboard
-├── payment/          # Checkout, Woovi gateway client, webhook processor
-├── user/             # User profile, plan management
-├── analytics/        # PRO-only habit analytics
-├── ratelimit/        # Bucket4j + Redis rate limiting interceptor
-└── shared/           # CORS config, global exception handler
+├── auth/             # Configuracao de seguranca, OAuth2, handler de login
+├── habit/            # CRUD de habitos, check-in, arquivamento, logs
+├── goal/             # Metas, habitos vinculados, checkpoints
+├── challenge/        # Criacao, participacao, check-in e placar de desafios
+├── payment/          # Checkout, cliente Woovi, processador de webhooks
+├── user/             # Perfil do usuario, gerenciamento de plano
+├── analytics/        # Analytics de habitos (somente PRO)
+├── ratelimit/        # Interceptor de rate limiting com Bucket4j + Redis
+└── shared/           # Configuracao de CORS, handler global de excecoes
 ```
 
-Database migrations are versioned under `src/main/resources/db/migration/` using Flyway.
+As migracoes do banco de dados sao versionadas em `src/main/resources/db/migration/` com Flyway.
 
-## API Endpoints
+## Endpoints da API
 
-| Module | Method | Path | Description |
+| Modulo | Metodo | Rota | Descricao |
 |---|---|---|---|
-| Habits | POST | /api/habits | Create habit |
-| Habits | GET | /api/habits | List active habits |
-| Habits | GET | /api/habits/archived | List archived habits |
-| Habits | GET | /api/habits/{id} | Get habit details |
-| Habits | PUT | /api/habits/{id} | Update habit |
-| Habits | DELETE | /api/habits/{id} | Delete habit |
-| Habits | PATCH | /api/habits/{id}/archive | Archive habit |
-| Habits | POST | /api/habits/{id}/check | Log completion |
-| Goals | POST | /api/goals | Create goal |
-| Goals | GET | /api/goals | List goals |
-| Goals | GET | /api/goals/{id} | Get goal details |
-| Goals | PUT | /api/goals/{id}/habits | Update linked habits |
-| Goals | PATCH | /api/goals/{id}/complete | Mark goal complete |
-| Goals | DELETE | /api/goals/{id} | Delete goal |
-| Challenges | POST | /api/challenges | Create challenge (PRO) |
-| Challenges | POST | /api/challenges/join | Join via invite code |
-| Challenges | GET | /api/challenges | List user challenges |
-| Challenges | GET | /api/challenges/{id} | Challenge details + leaderboard |
-| Challenges | POST | /api/challenges/{id}/check-in | Toggle habit check-in |
-| Payments | POST | /api/payments/checkout | Create PIX payment |
-| Payments | GET | /api/payments/{id}/status | Check payment status |
-| User | GET | /api/me | Current user info |
-| Analytics | GET | /api/analytics | Habit analytics (PRO) |
-| Webhooks | POST | /api/webhooks/** | Woovi payment webhook |
+| Habitos | POST | /api/habits | Criar habito |
+| Habitos | GET | /api/habits | Listar habitos ativos |
+| Habitos | GET | /api/habits/archived | Listar habitos arquivados |
+| Habitos | GET | /api/habits/{id} | Detalhes do habito |
+| Habitos | PUT | /api/habits/{id} | Atualizar habito |
+| Habitos | DELETE | /api/habits/{id} | Excluir habito |
+| Habitos | PATCH | /api/habits/{id}/archive | Arquivar habito |
+| Habitos | POST | /api/habits/{id}/check | Registrar conclusao |
+| Metas | POST | /api/goals | Criar meta |
+| Metas | GET | /api/goals | Listar metas |
+| Metas | GET | /api/goals/{id} | Detalhes da meta |
+| Metas | PUT | /api/goals/{id}/habits | Atualizar habitos vinculados |
+| Metas | PATCH | /api/goals/{id}/complete | Marcar meta como concluida |
+| Metas | DELETE | /api/goals/{id} | Excluir meta |
+| Desafios | POST | /api/challenges | Criar desafio (PRO) |
+| Desafios | POST | /api/challenges/join | Entrar por codigo de convite |
+| Desafios | GET | /api/challenges | Listar desafios do usuario |
+| Desafios | GET | /api/challenges/{id} | Detalhes do desafio e placar |
+| Desafios | POST | /api/challenges/{id}/check-in | Alternar check-in de habito |
+| Pagamentos | POST | /api/payments/checkout | Criar pagamento PIX |
+| Pagamentos | GET | /api/payments/{id}/status | Verificar status do pagamento |
+| Usuario | GET | /api/me | Dados do usuario autenticado |
+| Analytics | GET | /api/analytics | Analytics de habitos (PRO) |
+| Webhooks | POST | /api/webhooks/** | Webhook de pagamento Woovi |
 
-Full interactive documentation is available at `/swagger-ui.html` when the application is running.
+A documentacao interativa completa esta disponivel em `/swagger-ui.html` com a aplicacao em execucao.
 
-## Authentication
+## Autenticacao
 
-Authentication is handled via Google OAuth2. All `/api/**` endpoints require an authenticated session, with the exception of the payment webhook endpoint. Session data is managed with cookies (`SameSite=None`, `Secure=true`) and CSRF protection is enforced using the `X-XSRF-TOKEN` header.
+A autenticacao e feita via Google OAuth2. Todos os endpoints `/api/**` exigem sessao autenticada, com excecao do endpoint de webhook de pagamento. Os dados de sessao sao gerenciados por cookies (`SameSite=None`, `Secure=true`) e a protecao CSRF e aplicada via header `X-XSRF-TOKEN`.
 
-## Running Locally
+## Executando Localmente
 
-### Prerequisites
+### Pre-requisitos
 - Java 21
-- Docker (for PostgreSQL and Redis)
+- Docker (para PostgreSQL e Redis)
 
-### Setup
+### Configuracao
 
-1. Clone the repository and copy the environment file:
+1. Clone o repositorio e copie o arquivo de variaveis de ambiente:
    ```bash
    cp .env.example .env
    ```
 
-2. Fill in the required variables in `.env`:
+2. Preencha as variaveis obrigatorias no `.env`:
    ```
    DB_URL=jdbc:postgresql://localhost:5432/bonsaai
    DB_USERNAME=postgres
-   DB_PASSWORD=your_password
-   GOOGLE_CLIENT_ID=your_google_client_id
-   GOOGLE_CLIENT_SECRET=your_google_client_secret
+   DB_PASSWORD=sua_senha
+   GOOGLE_CLIENT_ID=seu_google_client_id
+   GOOGLE_CLIENT_SECRET=seu_google_client_secret
    FRONTEND_URL=http://localhost:3000
    REDIS_URL=redis://localhost:6379
-   WOOVI_APP_ID=your_woovi_app_id
+   WOOVI_APP_ID=seu_woovi_app_id
    WOOVI_API_URL=https://api.openpix.com.br
-   WOOVI_WEBHOOK_SECRET=your_webhook_secret
+   WOOVI_WEBHOOK_SECRET=seu_webhook_secret
    ```
 
-3. Start the infrastructure services:
+3. Suba os servicos de infraestrutura:
    ```bash
    ./start-dev.sh
    ```
 
-4. Run the application:
+4. Execute a aplicacao:
    ```bash
    ./mvnw spring-boot:run
    ```
 
-The API will be available at `http://localhost:8080`.
+A API estara disponivel em `http://localhost:8080`.
 
-## Running with Docker
+## Executando com Docker
 
-A multi-stage `Dockerfile` is included for production builds:
+Um `Dockerfile` multi-stage esta incluso para builds de producao:
 
 ```bash
 docker build -t bonsaai-api .
 docker run -p 8080:8080 --env-file .env bonsaai-api
 ```
 
-## Running Tests
+## Executando os Testes
 
 ```bash
 ./mvnw test
 ```
 
-Tests use an in-memory H2 database and do not require external services.
+Os testes utilizam banco de dados H2 em memoria e nao dependem de servicos externos.
 
-## Architecture Notes
+## Notas de Arquitetura
 
-- **Soft deletes**: Habits are archived using Hibernate annotations rather than hard-deleted, preserving historical log data.
-- **Idempotent webhooks**: Payment webhook events are deduplicated using a `processed_webhook_events` table, preventing double-activation on retries.
-- **Plan enforcement**: Business rules for FREE vs PRO tiers are enforced at the service layer, not just at the controller level.
-- **Rate limiting**: Applied via a Spring `HandlerInterceptor` before requests reach controllers, with per-user buckets stored in Redis.
+- **Soft deletes**: Habitos sao arquivados via anotacoes do Hibernate em vez de excluidos fisicamente, preservando o historico de logs.
+- **Webhooks idempotentes**: Eventos de webhook de pagamento sao deduplicados com a tabela `processed_webhook_events`, evitando ativacoes duplas em caso de retentativa.
+- **Aplicacao de planos**: As regras de negocio para os planos FREE e PRO sao aplicadas na camada de servico, nao apenas no controller.
+- **Rate limiting**: Aplicado via `HandlerInterceptor` do Spring antes de os requests chegarem aos controllers, com buckets por usuario armazenados no Redis.
